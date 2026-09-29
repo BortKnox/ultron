@@ -17,7 +17,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-supported-brightgreen?style=flat-square&logo=windows&logoColor=white" alt="Windows" />
-  <img src="https://img.shields.io/badge/macOS%20%26%20Linux-coming%20soon-yellow?style=flat-square" alt="macOS & Linux" />
+  <img src="https://img.shields.io/badge/status-archived-lightgrey?style=flat-square" alt="Archived" />
   <img src="https://img.shields.io/badge/privacy--first-local%20only-blue?style=flat-square" alt="Privacy" />
 </p>
 
@@ -25,12 +25,22 @@
 
 ---
 
-> **⚠️ Atlas is in active development (v0.2.3).**
-> 
-> - 🤖 **LLM support:** Gemini (including native [Computer Use API](https://ai.google.dev/gemini-api/docs/computer-use)) and OpenAI. More providers on the way.
+> **📦 This project is archived (final version: v0.2.3).**
+>
+> Development has stopped, and the repository is now read-only. I made this decision for two reasons:
+>
+> - **No Windows device for testing.** Atlas only runs on Windows, and I no longer have a Windows machine to develop and test on.
+> - **The idea is now built into the big assistants.** The major AI assistants ship native computer use in their own apps, so a standalone agent no longer has a reason to exist.
+>
+> The code stays available under the Apache 2.0 license. Fork it if you want to take it further.
+>
+> **Looking for something else to try?** Have a look at my current projects on [GitHub](https://github.com/dortanes). Something there might interest you.
+>
+> What Atlas supports in its final state:
+>
+> - 🤖 **LLM support:** Gemini (including native [Computer Use API](https://ai.google.dev/gemini-api/docs/computer-use)) and OpenAI.
 > - 🖥 **Screen control:** Gemini 3.x models use native [Computer Use API](https://ai.google.dev/gemini-api/docs/computer-use) for precise actions. Older models use vision-based coordinate prediction.
-> - 💻 **Platform:** Windows only for now. macOS & Linux support is planned.
-> - 🐛 **Found a bug?** We'd love to hear about it — [open an issue](https://github.com/dortanes/atlas/issues).
+> - 💻 **Platform:** Windows only.
 
 ---
 
@@ -151,21 +161,21 @@ yarn dev
 | ✅ | Intent classification (direct / action / chat) |
 | ✅ | Context caching (Gemini prompt caching for token optimization) |
 | ✅ | Voice input (wake word + local STT via Vosk) |
-| 🔜 | Action whitelist/blacklist & audit log |
-| 🔜 | Onboarding flow |
-| 🔜 | Auto-update |
+| ⏹ | Action whitelist/blacklist & audit log |
+| ⏹ | Onboarding flow |
+| ⏹ | Auto-update |
+
+> ⏹ Not implemented. Development has stopped.
 
 ---
 
-## ⭐ Support the Project
+## 🔭 My Other Projects
 
-If you find Atlas useful, please consider giving the repository a **star** ⭐ — it helps others discover the project and motivates further development!
-
-[![Star on GitHub](https://img.shields.io/github/stars/dortanes/atlas?style=social)](https://github.com/dortanes/atlas)
+See what I'm working on now: [github.com/dortanes](https://github.com/dortanes).
 
 ## 🤝 Contributing
 
-Contributions are welcome! Feel free to open an issue or submit a pull request.
+The repository is archived and no longer accepts issues or pull requests. Fork it to continue the work.
 
 ## 📜 License
 
