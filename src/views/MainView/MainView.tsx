@@ -263,17 +263,33 @@ export default defineComponent({
     }
 
     /**
-     * The orb is the conversational engage action. After a submitted voice
-     * command capture is intentionally off, so clicking the orb starts a
-     * fresh microphone session. Once capture is live, retain the existing orb
-     * behaviour of opening/closing the text input.
+     * The orb is the conversational engage action. Always hard-reset runtime
+     * capture first, then start a brand-new session. This also recovers from a
+     * stale browser/Vosk graph whose reactive state still says "active".
+     * The persisted voice-input preference is deliberately not changed here.
      */
-    function engageOrb() {
-      if (!micActive.value) {
-        void toggleMic()
-        return
+    async function engageOrb() {
+      if (micBusy.value) return
+      micBusy.value = true
+      try {
+        await disableSTT()
+        if (!voiceEnabled.value) {
+          voiceEnabled.value = true
+          await api.settings.saveConfig.mutate({ stt: { enabled: true } })
+        }
+        await enableSTT()
+        if (micError.value) {
+          pushWarning({ id: 'mic-error', message: micError.value, dismissable: true })
+        }
+      } catch (err) {
+        pushWarning({
+          id: 'mic-error',
+          message: err instanceof Error ? err.message : 'Microphone could not be started.',
+          dismissable: true,
+        })
+      } finally {
+        micBusy.value = false
       }
-      toggleInput()
     }
 
     /* ── Permission dismiss animation ── */
@@ -486,7 +502,7 @@ export default defineComponent({
             )}
           </div>
 
-          {/* Orb — conversational engage action; opens text input when already live */}
+          {/* Orb — hard-reset and engage a fresh conversational capture session */}
           <div
             class="main-view__orb-area animate-orb-in"
             onClick={this.engageOrb}

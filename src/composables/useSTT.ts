@@ -467,9 +467,9 @@ async function enable(): Promise<void> {
   }
 }
 
-function disable(): void {
+async function disable(): Promise<void> {
   micError.value = ''
-  void stopMic()
+  await stopMic()
 }
 
 /** Mirror the persisted auto-listen preference into the runtime watcher */
