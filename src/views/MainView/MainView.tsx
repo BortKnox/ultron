@@ -262,6 +262,20 @@ export default defineComponent({
       }, 300)
     }
 
+    /**
+     * The orb is the conversational engage action. After a submitted voice
+     * command capture is intentionally off, so clicking the orb starts a
+     * fresh microphone session. Once capture is live, retain the existing orb
+     * behaviour of opening/closing the text input.
+     */
+    function engageOrb() {
+      if (!micActive.value) {
+        void toggleMic()
+        return
+      }
+      toggleInput()
+    }
+
     /* ── Permission dismiss animation ── */
     const permissionDismissing = ref(false)
 
@@ -351,6 +365,7 @@ export default defineComponent({
       showInput,
       inputDismissing,
       toggleInput,
+      engageOrb,
       closeInput,
       permissionDismissing,
       onPermissionRespond,
@@ -471,10 +486,10 @@ export default defineComponent({
             )}
           </div>
 
-          {/* Orb — reflects agent state; click toggles InputBar */}
+          {/* Orb — conversational engage action; opens text input when already live */}
           <div
             class="main-view__orb-area animate-orb-in"
-            onClick={this.toggleInput}
+            onClick={this.engageOrb}
             onMouseenter={this.onMouseEnterUI}
             onMouseleave={this.onMouseLeaveUI}
           >
