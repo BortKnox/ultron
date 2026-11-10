@@ -87,7 +87,7 @@ export default defineComponent({
             <div class="settings-row">
               <div class="settings-row__info">
                 <span class="settings-row__label">Position</span>
-                <span class="settings-row__hint">Where Atlas appears on screen</span>
+                <span class="settings-row__hint">Where Ultron appears on screen</span>
               </div>
               <div class="settings-row__control">
                   <CustomSelect
@@ -120,7 +120,7 @@ export default defineComponent({
               <div class="settings-row">
                 <div class="settings-row__info">
                   <span class="settings-row__label">Global Hotkey</span>
-                  <span class="settings-row__hint">Toggle Atlas visibility</span>
+                  <span class="settings-row__hint">Toggle Ultron visibility</span>
                 </div>
               <div class="settings-row__control">
                 <div class="settings-hotkey">

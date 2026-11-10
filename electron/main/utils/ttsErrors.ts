@@ -4,12 +4,15 @@
  * Mirrors {@link formatLLMError} pattern for TTS providers.
  * Extracts meaningful messages from provider SDK errors
  * (ElevenLabs quota_exceeded, Gemini INVALID_ARGUMENT / RESOURCE_EXHAUSTED,
- * network failures) and maps them to user-friendly strings.
+ * network failures) and maps them to actionable strings.
  *
- * ## i18n Readiness
+ * ## Why the raw detail is appended
  *
- * Uses key-based lookup via {@link TTS_FALLBACK_MESSAGES}.
- * Replace with `t('tts.error.*')` calls when i18n is introduced.
+ * A mapped message on its own ("Gemini rejected the request") tells the user
+ * nothing they can act on. Every mapped message therefore carries the provider's
+ * own words in parentheses, truncated. The full, untruncated error is logged by
+ * the caller (`logRawGeminiError`), so the terminal has the complete picture
+ * while the UI stays readable.
  */
 
 /** Provider identifiers used to pick a message set */
@@ -21,6 +24,9 @@ const PROVIDER_LABELS: Record<string, string> = {
   'yandex-alice': 'Yandex Alice',
   gemini: 'Gemini',
 }
+
+/** Longest provider detail echoed into a user-facing message */
+const MAX_DETAIL_LENGTH = 240
 
 /**
  * Known TTS error status → user-facing message key.
@@ -93,7 +99,53 @@ function isNetworkError(err: unknown, text: string): boolean {
 }
 
 /**
- * Format any TTS SDK error into a clean, user-facing message.
+ * Extract the provider's own message, untouched by our mapping.
+ *
+ * Google SDK errors carry the payload at `error.body.error.message` (or
+ * `error.response.data.error.message`); ElevenLabs uses `error.body.detail`.
+ */
+export function getTTSErrorDetail(err: unknown): string | undefined {
+  if (!(err instanceof Error)) {
+    return typeof err === 'string' && err.trim() ? err.trim() : undefined
+  }
+
+  const obj = err as unknown as Record<string, unknown>
+  const response = obj.response as Record<string, unknown> | undefined
+  const body = (obj.body ?? response?.data ?? response) as Record<string, unknown> | undefined
+  const bodyError = body?.error as Record<string, unknown> | undefined
+
+  const candidates: unknown[] = [
+    bodyError?.message,
+    body?.message,
+    err.message,
+  ]
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+  }
+
+  return undefined
+}
+
+/** Append the provider's detail to a mapped message, unless it adds nothing */
+function withDetail(mapped: string, err: unknown, skip: boolean): string {
+  const detail = getTTSErrorDetail(err)
+  if (skip || !detail) return mapped
+
+  // Do not repeat what the mapped message already says, and do not echo the
+  // generic SDK wrapper ("400 status code (no body)" adds nothing).
+  if (mapped.toLowerCase().includes(detail.toLowerCase())) return mapped
+  if (/^(4|5)\d\d status code/i.test(detail) && !detail.includes(':')) return mapped
+
+  const clipped = detail.length > MAX_DETAIL_LENGTH
+    ? `${detail.slice(0, MAX_DETAIL_LENGTH - 1)}…`
+    : detail
+
+  return `${mapped} — ${clipped}`
+}
+
+/**
+ * Map any TTS SDK error into a clean, actionable message.
  *
  * Handles:
  * - ElevenLabs quota_exceeded (body.detail.status)
@@ -102,9 +154,13 @@ function isNetworkError(err: unknown, text: string): boolean {
  * - Network failures
  * - Generic Error objects
  *
+ * The provider's own wording is appended where available, so the user sees
+ * "Gemini rejected the request … — API key not valid" rather than a bare
+ * rejection.
+ *
  * @param err — raw error from a TTS SDK call
  * @param provider — provider id, used to name the service in the message
- * @returns A clean, user-friendly error message
+ * @returns A clean, actionable error message
  */
 export function formatTTSError(err: unknown, provider?: string): string {
   if (!(err instanceof Error)) {
@@ -126,7 +182,7 @@ export function formatTTSError(err: unknown, provider?: string): string {
   if (body) {
     const detail = body.detail as Record<string, unknown> | undefined
     if (detail?.status === 'quota_exceeded') {
-      return resolveMessage('tts.error.quota_exceeded', provider)
+      return withDetail(resolveMessage('tts.error.quota_exceeded', provider), err, false)
     }
   }
 
@@ -137,38 +193,38 @@ export function formatTTSError(err: unknown, provider?: string): string {
     text.includes('exceeded your current quota') ||
     text.includes('quota exceeded')
   ) {
-    return resolveMessage('tts.error.quota_exceeded', provider)
+    return withDetail(resolveMessage('tts.error.quota_exceeded', provider), err, false)
   }
 
   // ── Gemini: rejected credentials / invalid arguments ──
   if (text.includes('api key not valid') || text.includes('api_key_invalid')) {
-    return resolveMessage('tts.error.auth_failed', provider)
+    return withDetail(resolveMessage('tts.error.auth_failed', provider), err, false)
   }
   if (text.includes('permission_denied') && text.includes('api key')) {
-    return resolveMessage('tts.error.permission_denied', provider)
+    return withDetail(resolveMessage('tts.error.permission_denied', provider), err, false)
   }
 
   // ── HTTP status code from error object ──
   const statusCode = errObj.statusCode ?? errObj.status ?? errObj.code
   if (typeof statusCode === 'number') {
     const key = STATUS_MESSAGES[String(statusCode)]
-    if (key) return resolveMessage(key, provider)
+    if (key) return withDetail(resolveMessage(key, provider), err, false)
   }
 
   // ── Status codes / Google status names embedded in the message ──
   for (const [code, key] of Object.entries(STATUS_MESSAGES)) {
     if (message.includes(code)) {
-      return resolveMessage(key, provider)
+      return withDetail(resolveMessage(key, provider), err, false)
     }
   }
   if (text.includes('not_found') || text.includes('not found')) {
-    return resolveMessage('tts.error.model_not_found', provider)
+    return withDetail(resolveMessage('tts.error.model_not_found', provider), err, false)
   }
   if (text.includes('invalid_argument')) {
-    return resolveMessage('tts.error.bad_request', provider)
+    return withDetail(resolveMessage('tts.error.bad_request', provider), err, false)
   }
 
-  // Fall through to raw message
+  // Fall through to the raw message
   return message || resolveMessage('tts.error.unknown', provider)
 }
 

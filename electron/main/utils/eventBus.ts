@@ -84,8 +84,8 @@ export interface MainEvents {
 
   // ── Hotkey Events ──
 
-  /** Global hotkey: toggle Atlas visibility + InputBar */
-  'hotkey:toggle-atlas': []
+  /** Global hotkey: toggle window visibility + InputBar */
+  'hotkey:toggle-window': []
 
   // ── Audio / STT Events ──
 

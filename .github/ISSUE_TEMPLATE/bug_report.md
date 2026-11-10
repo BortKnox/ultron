@@ -1,6 +1,6 @@
 ---
 name: 🐛 Bug Report
-about: Report a bug to help us improve Atlas
+about: Report a bug to help us improve Ultron
 title: "[Bug] "
 labels: bug
 assignees: ''
@@ -22,7 +22,7 @@ If applicable, add screenshots or screen recordings.
 
 ## Environment
 - **OS:** Windows 10 / 11 (build number)
-- **Atlas version:** 0.x.x
+- **Ultron version:** 0.x.x
 - **Node.js version:** 
 - **LLM Provider:** Gemini / OpenAI
 

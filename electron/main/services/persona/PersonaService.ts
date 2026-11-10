@@ -10,26 +10,12 @@ import type { MemoryService } from '@electron/services/memory/MemoryService'
 import type { FactService } from '@electron/services/memory/FactService'
 
 /**
- * Display values shipped by the Atlas-era default persona.
- *
- * Used to detect an untouched default persona so its identity can be upgraded
- * to Ultron without overwriting anything the user customised.
- */
-const LEGACY_DEFAULT_NAME = 'Atlas'
-const LEGACY_DEFAULT_AVATAR = '🛸'
-const LEGACY_DEFAULT_PERSONALITY =
-  'You are helpful, concise, and proactive.\n' +
-  'You speak naturally, not in a robotic manner.\n' +
-  'You explain what you are doing before and after acting.\n' +
-  'When unsure, you ask clarifying questions rather than guess.'
-
-/**
  * PersonaService — CRUD for agent personas.
  *
  * Storage: `userData/Personas` — a flat JSON array of AgentProfile[].
  * Each persona can optionally have prompt overrides in `userData/Prompts/{personaId}/`.
  *
- * The default "Atlas" persona is always present and cannot be deleted.
+ * The default "Ultron" persona is always present and cannot be deleted.
  */
 export class PersonaService extends BaseService {
   private personas: AgentProfile[] = []
@@ -54,8 +40,6 @@ export class PersonaService extends BaseService {
     if (!this.personas.find((p) => p.id === DEFAULT_PERSONA.id)) {
       this.personas.unshift({ ...DEFAULT_PERSONA, createdAt: new Date().toISOString() })
       this.saveToDisk()
-    } else {
-      this.upgradeDefaultPersonaIdentity()
     }
 
     // Ensure activePersonaId points to an existing persona
@@ -182,38 +166,6 @@ export class PersonaService extends BaseService {
   }
 
   // ── Private helpers ──
-
-  /**
-   * Rename an untouched Atlas default persona to the Ultron identity.
-   *
-   * Each field is only replaced when it still holds the original Atlas value,
-   * so custom names, avatars or personalities are preserved exactly as the
-   * user left them.
-   */
-  private upgradeDefaultPersonaIdentity(): void {
-    const persona = this.personas.find((p) => p.id === DEFAULT_PERSONA.id)
-    if (!persona) return
-
-    let changed = false
-
-    if (!persona.name || persona.name === LEGACY_DEFAULT_NAME) {
-      persona.name = DEFAULT_PERSONA.name
-      changed = true
-    }
-    if (!persona.avatar || persona.avatar === LEGACY_DEFAULT_AVATAR) {
-      persona.avatar = DEFAULT_PERSONA.avatar
-      changed = true
-    }
-    if (persona.personality === LEGACY_DEFAULT_PERSONALITY) {
-      persona.personality = DEFAULT_PERSONA.personality
-      changed = true
-    }
-
-    if (changed) {
-      this.saveToDisk()
-      this.log.info('Upgraded default persona identity to Ultron (custom values preserved)')
-    }
-  }
 
   private loadFromDisk(): void {
     try {

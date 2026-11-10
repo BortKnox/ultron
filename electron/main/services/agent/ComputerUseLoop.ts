@@ -263,7 +263,7 @@ export async function runComputerUseLoop(
         const currentStepId = activateStep(stepTasks, stepLabel)
 
         // ── Check safety_decision ──
-        // Auto-acknowledge Gemini's safety decisions — Atlas has its own
+        // Auto-acknowledge Gemini's safety decisions — Ultron has its own
         // ActionRiskClassifier for truly dangerous actions. Gemini's browser-oriented
         // safety is overly cautious for a desktop agent acting on user's explicit commands.
         let safetyAcknowledged = false
@@ -364,8 +364,8 @@ export async function runComputerUseLoop(
 
         // ── Execute action ──
         blurForAction()
-        // Give Windows time to transfer focus from Atlas to the target app.
-        // Without this delay, keypresses may go to Atlas instead of the target window.
+        // Give Windows time to transfer focus from Ultron to the target app.
+        // Without this delay, keypresses may go to Ultron instead of the target window.
         await sleep(150)
 
         const stopAction = sessionLogger?.startTimer(`Action: ${fc.name}`)

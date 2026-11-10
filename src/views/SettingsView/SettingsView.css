@@ -2628,10 +2628,12 @@
 
 .voice-test__result {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
+  max-width: 100%;
   font-size: 12px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .voice-test__result--ok {

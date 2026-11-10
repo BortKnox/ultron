@@ -442,8 +442,10 @@ export default defineComponent({
           )}
 
           <div class="voice-note">
-            Gemini TTS is buffered — it returns one complete WAV utterance per reply, so playback
+            Gemini TTS is buffered — it returns one complete utterance per reply, so playback
             starts after synthesis finishes. ElevenLabs streams MP3 while speaking.
+            If a provider rejects a request, the full response from that provider is printed to the
+            terminal log, and the reason is shown above.
           </div>
         </div>
 

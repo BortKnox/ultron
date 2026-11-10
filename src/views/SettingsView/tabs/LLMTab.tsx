@@ -21,7 +21,9 @@ export default defineComponent({
   setup() {
     const showAdvanced = ref(false)
     const resetting = ref(false)
-    return { showAdvanced, resetting }
+    /** Reveals the API key so the user can verify what is stored */
+    const showApiKey = ref(false)
+    return { showAdvanced, resetting, showApiKey }
   },
 
   render() {
@@ -65,8 +67,26 @@ export default defineComponent({
               </label>
             )}
             <label class="settings-field">
-              <span class="settings-field__label">API Key</span>
-              <input type="password" class="settings-field__input" value={llm.apiKey}
+              <span class="settings-field__label settings-field__label--split">
+                API Key
+                <button
+                  type="button"
+                  class="voice-key-toggle"
+                  aria-label={this.showApiKey ? 'Hide API key' : 'Show API key'}
+                  onClick={(e: MouseEvent) => {
+                    e.preventDefault()
+                    this.showApiKey = !this.showApiKey
+                  }}
+                >
+                  {this.showApiKey ? 'Hide' : 'Show'}
+                </button>
+              </span>
+              <input
+                type={this.showApiKey ? 'text' : 'password'}
+                class="settings-field__input"
+                value={llm.apiKey}
+                autocomplete="off"
+                spellcheck={false}
                 placeholder={llm.provider === 'openai' ? 'Optional for local models...' : 'Enter your API key...'}
                 onInput={(e: Event) => { llm.apiKey = (e.target as HTMLInputElement).value }} />
             </label>

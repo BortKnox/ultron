@@ -18,7 +18,7 @@ export interface ScreenInfo {
  */
 export class CoordinateMapper {
   /**
-   * Get display info for the monitor the Atlas window is on.
+   * Get display info for the monitor the Ultron window is on.
    */
   getScreenInfo(): ScreenInfo {
     const display = getWindowDisplay()

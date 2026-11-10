@@ -1,13 +1,18 @@
 /* ── Widget Controls ──────────────────────────────────────────────
    Compact control row for the floating widget.
    Graphite surfaces, restrained crimson accent, no colour-only states.
+
+   Hierarchy: a passive graphite pill, crimson only for subsystems that are
+   genuinely on. Buttons are 36px (comfortable pointer target at this scale),
+   icons sit at 55% white so they stay legible against the near-black plate
+   without competing with the orb.
    ──────────────────────────────────────────────────────────────── */
 
 .widget-controls {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px;
+  gap: 6px;
+  padding: 5px;
   border-radius: var(--radius-pill);
   background: linear-gradient(
     180deg,
@@ -16,6 +21,7 @@
   );
   border: 1px solid rgba(255 255 255 / 0.07);
   box-shadow:
+    inset 0 1px 0 rgba(255 255 255 / 0.05),
     0 1px 2px rgba(0 0 0 / 0.4),
     0 8px 24px rgba(0 0 0 / 0.35);
   backdrop-filter: blur(var(--blur-glass));
@@ -28,13 +34,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: transparent;
-  color: rgba(255 255 255 / 0.45);
+  color: rgba(255 255 255 / 0.55);
   cursor: pointer;
   transition:
     background 180ms var(--spring-smooth),
@@ -44,8 +50,8 @@
 }
 
 .widget-controls__btn:hover:not(:disabled) {
-  background: rgba(255 255 255 / 0.07);
-  color: rgba(255 255 255 / 0.85);
+  background: rgba(255 255 255 / 0.08);
+  color: rgba(255 255 255 / 0.92);
 }
 
 .widget-controls__btn:active:not(:disabled) {
@@ -60,27 +66,36 @@
 /* Active = the underlying subsystem is genuinely on */
 .widget-controls__btn--active {
   color: var(--color-ultron-crimson-soft);
-  background: rgba(190 38 42 / 0.14);
-  border-color: rgba(190 38 42 / 0.32);
+  background: rgba(190 38 42 / 0.16);
+  border-color: rgba(190 38 42 / 0.36);
+  box-shadow: inset 0 0 0 1px rgba(214 62 54 / 0.14);
 }
 
 .widget-controls__btn--active:hover:not(:disabled) {
-  background: rgba(190 38 42 / 0.22);
+  background: rgba(190 38 42 / 0.24);
   color: var(--color-ultron-crimson-soft);
 }
 
+/*
+ * Dormant: voice input is switched off in Settings. Still clickable — that is
+ * the shortest path to turning capture on — so it reads as "available but
+ * idle", not as a disabled control.
+ */
+.widget-controls__btn--dormant {
+  color: rgba(255 255 255 / 0.38);
+}
+
+.widget-controls__btn--dormant:hover:not(:disabled) {
+  color: rgba(255 255 255 / 0.85);
+}
+
 .widget-controls__btn--ghost {
-  color: rgba(255 255 255 / 0.35);
+  color: rgba(255 255 255 / 0.42);
 }
 
-.widget-controls__btn--disabled,
+.widget-controls__btn--busy,
 .widget-controls__btn:disabled {
-  opacity: 0.32;
-  cursor: not-allowed;
-}
-
-.widget-controls__btn--busy {
-  opacity: 0.75;
+  opacity: 0.7;
   cursor: progress;
 }
 
@@ -92,8 +107,8 @@
 /* Small always-present state dot: filled + pulsing when live */
 .widget-controls__dot {
   position: absolute;
-  top: 5px;
-  right: 5px;
+  top: 6px;
+  right: 6px;
   width: 5px;
   height: 5px;
   border-radius: 50%;
@@ -107,11 +122,17 @@
   animation: widget-dot-pulse 2s ease-in-out infinite;
 }
 
+.widget-controls__dot--busy {
+  background: rgba(255 255 255 / 0.65);
+  animation: widget-dot-pulse 1s ease-in-out infinite;
+}
+
 .widget-controls__divider {
   width: 1px;
-  height: 18px;
+  height: 20px;
   margin: 0 2px;
   background: rgba(255 255 255 / 0.08);
+  flex-shrink: 0;
 }
 
 @keyframes widget-dot-pulse {
@@ -125,7 +146,8 @@
   .widget-controls__btn {
     transition: none;
   }
-  .widget-controls__dot--live {
+  .widget-controls__dot--live,
+  .widget-controls__dot--busy {
     animation: none;
   }
 }

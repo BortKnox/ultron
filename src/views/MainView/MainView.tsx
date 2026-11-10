@@ -119,6 +119,20 @@ export default defineComponent({
       }
     }
 
+    /**
+     * Tooltip for the microphone button.
+     *
+     * Mirrors the real pipeline state so the button never describes something
+     * different from what capture is doing.
+     */
+    function micHintText(): string {
+      if (micBusy.value) return 'Starting microphone…'
+      if (micActive.value) return 'Listening — click to stop'
+      if (micError.value) return micError.value
+      if (!voiceEnabled.value) return 'Voice input is off — click to enable'
+      return 'Start listening'
+    }
+
     /** Speaker toggle — mutes/unmutes voice output only (never the microphone) */
     async function toggleSpeech() {
       const next = !speechEnabled.value
@@ -351,8 +365,9 @@ export default defineComponent({
       micActive,
       micBusy,
       micLoading: isModelLoading,
-      speechEnabled,
+      micHintText,
       voiceEnabled,
+      speechEnabled,
       toggleMic,
       toggleSpeech,
       openSettings,
@@ -474,9 +489,10 @@ export default defineComponent({
           >
             <WidgetControls
               micActive={this.micActive}
+              micAvailable={this.voiceEnabled}
               micBusy={this.micBusy || this.micLoading}
+              micHint={this.micHintText()}
               speechEnabled={this.speechEnabled}
-              micHint="Start voice input (requires a downloaded speech model)"
               onToggleMic={this.toggleMic}
               onToggleSpeech={this.toggleSpeech}
               onOpenSettings={this.openSettings}

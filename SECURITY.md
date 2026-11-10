@@ -2,11 +2,11 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Atlas, please report it responsibly.
+If you discover a security vulnerability in Ultron, please report it responsibly.
 
 **Do NOT open a public issue.** Instead, email us directly:
 
-📧 **[dortanes](https://github.com/dortanes)** — reach out via GitHub profile
+📧 **[BortKnox](https://github.com/BortKnox)** — reach out via GitHub profile
 
 ### What to include
 

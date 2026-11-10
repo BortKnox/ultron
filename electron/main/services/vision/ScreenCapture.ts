@@ -24,7 +24,7 @@ export interface Rect {
  */
 export class ScreenCapture {
   /**
-   * Capture the display the Atlas window is on, optimized for LLM.
+   * Capture the display the Ultron window is on, optimized for LLM.
    *
    * @param format — 'jpeg' (default, smaller) or 'png' (required by Computer Use API)
    * @returns Resized buffer in the requested format.
@@ -32,7 +32,7 @@ export class ScreenCapture {
   async captureFullScreen(format: 'jpeg' | 'png' = 'jpeg'): Promise<Buffer> {
     log.debug('Capturing full screen...')
 
-    // Determine which screenshot-desktop display matches the Atlas window
+    // Determine which screenshot-desktop display matches the Ultron window
     const screenId = await this.resolveDisplayId()
 
     let img: Buffer | string
@@ -52,7 +52,7 @@ export class ScreenCapture {
   }
 
   /**
-   * Match the Atlas window's display to a screenshot-desktop display ID.
+   * Match the Ultron window's display to a screenshot-desktop display ID.
    * Returns the display ID string (e.g. `\\.\DISPLAY2`) or undefined to use default.
    */
   private async resolveDisplayId(): Promise<string | undefined> {

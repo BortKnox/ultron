@@ -70,7 +70,7 @@ export interface TTSConfig {
   provider: string
   /**
    * @deprecated Legacy single-provider credentials.
-   * Kept so Atlas-era configs keep their values; migrated into
+   * Kept so Ultron-era configs keep their values; migrated into
    * `providers.*` on load and no longer read by TTSService.
    */
   apiKey: string

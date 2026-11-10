@@ -13,6 +13,11 @@ import './WidgetControls.css'
  * Plus a shortcut into Settings, so the user never has to leave the widget
  * to reconfigure the assistant.
  *
+ * The microphone is never a dead button: when voice input is switched off in
+ * Settings it renders dormant but stays clickable, because clicking it is the
+ * shortest way to turn capture on. Only an in-flight start (`micBusy`)
+ * disables it, and that state is announced through `aria-busy`.
+ *
  * Accessibility: real `<button>` elements, `aria-pressed`, accessible labels,
  * keyboard focus rings, and state communicated by icon + label + shape
  * (never colour alone).
@@ -23,20 +28,29 @@ export default defineComponent({
   props: {
     /** Microphone is actually capturing audio */
     micActive: { type: Boolean, default: false },
-    /** Voice input is allowed by Settings (mic button is inert when false) */
+    /** Voice input is allowed by Settings (dormant, still clickable, when false) */
     micAvailable: { type: Boolean, default: true },
     /** Spoken responses are enabled */
     speechEnabled: { type: Boolean, default: true },
     /** Model is loading / permission prompt is open */
     micBusy: { type: Boolean, default: false },
-    /** Tooltip explaining why the mic is unavailable */
+    /** Tooltip explaining the current microphone state */
     micHint: { type: String, default: '' },
   },
 
   emits: ['toggleMic', 'toggleSpeech', 'openSettings'],
 
   render() {
-    const micLabel = this.micActive ? 'Stop listening' : 'Start listening'
+    const micLabel = this.micActive
+      ? 'Stop listening'
+      : this.micAvailable
+        ? 'Start listening'
+        : 'Enable voice input'
+
+    const micTitle = this.micBusy
+      ? 'Starting microphone…'
+      : this.micHint || micLabel
+
     const speechLabel = this.speechEnabled ? 'Mute spoken responses' : 'Enable spoken responses'
 
     return (
@@ -47,17 +61,15 @@ export default defineComponent({
           class={[
             'widget-controls__btn',
             this.micActive && 'widget-controls__btn--active',
-            !this.micAvailable && 'widget-controls__btn--disabled',
+            !this.micActive && !this.micAvailable && 'widget-controls__btn--dormant',
             this.micBusy && 'widget-controls__btn--busy',
           ]}
           aria-pressed={this.micActive}
-          aria-label={this.micAvailable ? micLabel : 'Voice input disabled in Settings'}
-          title={
-            !this.micAvailable
-              ? (this.micHint || 'Voice input is disabled in Settings → Voice')
-              : micLabel
-          }
-          disabled={!this.micAvailable || this.micBusy}
+          aria-busy={this.micBusy}
+          aria-disabled={this.micBusy}
+          aria-label={micLabel}
+          title={micTitle}
+          disabled={this.micBusy}
           onClick={() => this.$emit('toggleMic')}
         >
           <span class="material-symbols-rounded widget-controls__icon">
@@ -68,6 +80,7 @@ export default defineComponent({
             class={[
               'widget-controls__dot',
               this.micActive && 'widget-controls__dot--live',
+              this.micBusy && 'widget-controls__dot--busy',
             ]}
             aria-hidden="true"
           />

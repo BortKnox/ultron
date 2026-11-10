@@ -1,6 +1,6 @@
 {
   "name": "ultron",
-  "description": "Ultron — an AI-powered desktop agent built with Electron. Fork of Atlas by dortanes.",
+  "description": "Ultron — a desktop AI agent that sees your screen, speaks, and gets things done.",
   "type": "module",
   "version": "0.2.3",
   "license": "Apache-2.0",

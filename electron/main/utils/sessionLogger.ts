@@ -36,7 +36,7 @@ export class SessionLogger {
 
     this.lines.push(
       '═══════════════════════════════════════════',
-      ' Atlas Session Log',
+      ' Ultron Session Log',
       ` ${ts()}`,
       ` Persona: ${personaName}`,
       '═══════════════════════════════════════════',

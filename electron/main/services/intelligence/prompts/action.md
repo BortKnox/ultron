@@ -90,4 +90,4 @@ After each action you get an execution log of all actions + results. Use it to t
 - Open URL: `Start-Process "https://example.com"`
 
 ## Multi-Monitor Window Operations
-To close/minimize windows on a specific monitor, use Win32 API with `GetWindowRect` to filter by monitor bounds. Always exclude "atlas" and "electron" from bulk operations. Use the ACTIVE monitor bounds from Display Setup above.
+To close/minimize windows on a specific monitor, use Win32 API with `GetWindowRect` to filter by monitor bounds. Always exclude "ultron", "atlas" (legacy builds) and "electron" from bulk operations. Use the ACTIVE monitor bounds from Display Setup above.

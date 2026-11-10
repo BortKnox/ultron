@@ -4,7 +4,7 @@
  * Two kinds of migration happen here:
  *
  * 1. **Flat → nested** (`migrateFlat`)
- *    Early versions of Atlas stored settings as flat top-level keys
+ *    Early versions of Ultron stored settings as flat top-level keys
  *    (e.g. `apiKey`, `textModel`). They are moved into the current
  *    nested structure (e.g. `llm.apiKey`, `llm.textModel`).
  *

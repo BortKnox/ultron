@@ -1,5 +1,4 @@
 import * as path from 'node:path'
-import * as fs from 'node:fs'
 import { app, BrowserWindow, protocol, net } from 'electron'
 import { ServiceRegistry } from './services/ServiceRegistry'
 import { IntelligenceService } from './services/intelligence/IntelligenceService'
@@ -32,7 +31,8 @@ const log = createLogger('Main')
 
 // ── Platform Setup ──
 
-// Stable identity across dev and packaged builds ('atlas' before the fork)
+// Fixed application name: Electron derives the user-data directory from it, so
+// every install reads and writes the same Ultron directory from the first launch.
 app.setName('Ultron')
 
 if (process.platform === 'win32') app.setAppUserModelId('com.bortknox.ultron')
@@ -42,38 +42,6 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0)
 }
 
-/**
- * Keep Atlas-era user data when the application is renamed.
- *
- * Electron derives `userData` from the app name, so renaming Atlas → Ultron
- * would otherwise point at a brand-new empty directory and silently forget
- * the user's config, personas, memory, facts, prompts and downloaded models.
- *
- * If the new directory does not exist yet but a previous one contains a
- * `Config` file (written by this app), the legacy directory is reused in
- * place — nothing is copied, moved or deleted.
- */
-function preserveLegacyUserData(): void {
-  try {
-    const appData = app.getPath('appData')
-    const current = path.join(appData, app.getName())
-
-    if (fs.existsSync(current)) return
-
-    for (const legacyName of ['Ultron', 'ultron', 'Atlas', 'atlas']) {
-      const candidate = path.join(appData, legacyName)
-      if (candidate === current) continue
-      if (fs.existsSync(path.join(candidate, 'Config'))) {
-        app.setPath('userData', candidate)
-        return
-      }
-    }
-  } catch {
-    // Never block startup because of the migration probe
-  }
-}
-
-preserveLegacyUserData()
 
 // Register custom protocol for serving STT model files to renderer
 protocol.registerSchemesAsPrivileged([
@@ -142,7 +110,7 @@ app.whenReady().then(async () => {
   createTray(persona)
 
   // Global hotkey → toggle window visibility
-  mainEventBus.on('hotkey:toggle-atlas', () => toggleWindow())
+  mainEventBus.on('hotkey:toggle-window', () => toggleWindow())
 
   log.info('Ultron ready')
 })

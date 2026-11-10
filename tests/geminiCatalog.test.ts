@@ -5,6 +5,7 @@ import {
   GEMINI_TTS_MODELS,
   GEMINI_TTS_VOICES,
   TTS_PROVIDERS,
+  getGeminiModelApi,
   isKnownGeminiModel,
   isKnownGeminiVoice,
   isKnownProvider,
@@ -27,9 +28,20 @@ describe('Gemini TTS catalogue', () => {
     expect(isKnownGeminiVoice(DEFAULT_GEMINI_TTS_VOICE)).toBe(true)
   })
 
+  it('defaults to the model that answers generateContent', () => {
+    expect(DEFAULT_GEMINI_TTS_MODEL).toBe('gemini-2.5-flash-preview-tts')
+    expect(getGeminiModelApi(DEFAULT_GEMINI_TTS_MODEL)).toBe('generateContent')
+  })
+
+  it('routes each model to its documented API', () => {
+    expect(getGeminiModelApi('gemini-3.8-flash-tts')).toBe('interactions')
+    expect(getGeminiModelApi('gemini-2.5-pro-preview-tts')).toBe('generateContent')
+    // Custom ids are given the most widely supported shape
+    expect(getGeminiModelApi('some-future-tts')).toBe('generateContent')
+  })
+
   it('recognises documented models only', () => {
     expect(isKnownGeminiModel('gemini-3.8-flash-tts')).toBe(true)
-    expect(isKnownGeminiModel('gemini-3.8-flash-lite-tts')).toBe(true)
     expect(isKnownGeminiModel('gemini-made-up-tts')).toBe(false)
   })
 

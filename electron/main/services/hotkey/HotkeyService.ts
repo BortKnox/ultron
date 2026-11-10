@@ -119,7 +119,7 @@ export class HotkeyService extends BaseService {
         e.keycode === this.hotkey.keycode
       ) {
         this.log.debug(`Global hotkey: ${getConfig().hotkey} → toggle Ultron`)
-        mainEventBus.emit('hotkey:toggle-atlas')
+        mainEventBus.emit('hotkey:toggle-window')
       }
     }
 

@@ -21,41 +21,89 @@ export interface TTSOption {
   hint?: string
 }
 
-/** Default Gemini TTS model — cost-efficient and free-tier capable */
-export const DEFAULT_GEMINI_TTS_MODEL = 'gemini-3.8-flash-lite-tts'
+/**
+ * The two request shapes Gemini serves TTS from.
+ *
+ * Models are split by API: the preview family answers `generateContent` with
+ * `responseModalities: [AUDIO]`, while the 3.8 family answers the Interactions
+ * endpoint. The provider still retries the other shape once if Google reports
+ * a mismatch, because these assignments have changed between API revisions.
+ */
+export type GeminiApi = 'generateContent' | 'interactions'
+
+/** A Gemini TTS model plus the request shape it is served by */
+export interface GeminiTTSModelOption extends TTSOption {
+  /** API this model is documented to use */
+  api: GeminiApi
+  /** Marks the model selected for new installs */
+  isDefault?: boolean
+}
+
+/**
+ * Gemini TTS models, verified against the documentation (2026-11).
+ *
+ * The preview models are listed first because they are the ones that reliably
+ * answer `generateContent`; the 3.8 models are the current generation and
+ * answer the Interactions endpoint. Every entry can be overridden with a
+ * custom model id in Settings.
+ */
+export const GEMINI_TTS_MODELS: GeminiTTSModelOption[] = [
+  {
+    value: 'gemini-2.5-flash-preview-tts',
+    label: 'Gemini 2.5 Flash TTS (preview)',
+    hint: 'Fast and cheap · generateContent',
+    api: 'generateContent',
+    isDefault: true,
+  },
+  {
+    value: 'gemini-2.5-pro-preview-tts',
+    label: 'Gemini 2.5 Pro TTS (preview)',
+    hint: 'Higher fidelity · generateContent',
+    api: 'generateContent',
+  },
+  {
+    value: 'gemini-3.1-flash-tts-preview',
+    label: 'Gemini 3.1 Flash TTS (preview)',
+    hint: 'Preview · generateContent',
+    api: 'generateContent',
+  },
+  {
+    value: 'gemini-3.8-flash-lite-tts',
+    label: 'Gemini 3.8 Flash-Lite TTS',
+    hint: 'Current generation · interactions',
+    api: 'interactions',
+  },
+  {
+    value: 'gemini-3.8-flash-tts',
+    label: 'Gemini 3.8 Flash TTS',
+    hint: 'Studio-grade fidelity · interactions',
+    api: 'interactions',
+  },
+]
+
+/** Default Gemini TTS model — the shape that answers on the widest set of keys */
+export const DEFAULT_GEMINI_TTS_MODEL =
+  GEMINI_TTS_MODELS.find((m) => m.isDefault)?.value ?? 'gemini-2.5-flash-preview-tts'
 
 /** Default Gemini TTS voice — composed, firm delivery suits the default persona */
 export const DEFAULT_GEMINI_TTS_VOICE = 'Kore'
 
 /**
- * Gemini TTS models verified against the current documentation.
+ * Models tried, in order, **only** when the requested model id does not exist.
  *
- * The Gemini 3.8 models are the current generation and both include a free
- * tier. The two `preview` entries are older models kept for compatibility —
- * they are labelled as legacy so nobody selects them by accident.
+ * Model ids get retired; this keeps voice output working instead of failing
+ * with a 404. Every substitution is logged. The list is deliberately short —
+ * each entry costs a network round trip.
  */
-export const GEMINI_TTS_MODELS: TTSOption[] = [
-  {
-    value: 'gemini-3.8-flash-lite-tts',
-    label: 'Gemini 3.8 Flash-Lite TTS',
-    hint: 'Fast and cheapest — recommended',
-  },
-  {
-    value: 'gemini-3.8-flash-tts',
-    label: 'Gemini 3.8 Flash TTS',
-    hint: 'Studio-grade fidelity, slower',
-  },
-  {
-    value: 'gemini-3.1-flash-tts-preview',
-    label: 'Gemini 3.1 Flash TTS (preview)',
-    hint: 'Legacy preview model',
-  },
-  {
-    value: 'gemini-2.5-pro-preview-tts',
-    label: 'Gemini 2.5 Pro TTS (preview)',
-    hint: 'Legacy preview model',
-  },
+export const GEMINI_MODEL_FALLBACKS: string[] = [
+  'gemini-3.8-flash-lite-tts',
+  'gemini-3.1-flash-tts-preview',
 ]
+
+/** Which request shape a model uses (unknown/custom ids default to generateContent) */
+export function getGeminiModelApi(model: string): GeminiApi {
+  return GEMINI_TTS_MODELS.find((m) => m.value === model)?.api ?? 'generateContent'
+}
 
 /**
  * The 30 prebuilt Gemini studio voices.

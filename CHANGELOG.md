@@ -8,7 +8,9 @@ Fork of [Atlas](https://github.com/dortanes/atlas) v0.2.3. Full rationale and au
 - **Persistent listening indicator** — visible badge while the microphone captures, even when the widget is collapsed (`components/controls/ListeningIndicator`)
 - **Explicit microphone lifecycle** — `useSTT` gained `enable()` / `disable()` / `micActive` / `micError`; capture is never restored on launch unless opted in
 - **`stt.autoListen`** — explicit opt-in for starting the microphone on launch; existing installs with STT enabled are migrated to `true`
-- **Google Gemini TTS provider** — `gemini-3.8-flash-tts` / `gemini-3.8-flash-lite-tts` via the Interactions API, 30 studio voices (`services/tts/GeminiTTSProvider.ts`, `geminiCatalog.ts`)
+- **Google Gemini TTS provider** — `generateContent` with `responseModalities: [AUDIO]`, Interactions as a documented fallback, 30 studio voices (`services/tts/GeminiTTSProvider.ts`, `geminiCatalog.ts`)
+- **Per-model endpoint routing** — `GEMINI_TTS_MODELS[].api` records whether a model answers `generateContent` or Interactions; the Voice tab shows it in the hint
+- **Raw Gemini error logging** — `logRawGeminiError` prints HTTP status, Google's `error.status`, `error.message` and `error.details` to the terminal
 - **WAV support** — `utils/wav.ts` builds/parses RIFF headers; `useTTS` gained a `wav` blob pipeline
 - **Per-provider TTS credentials** — `tts.providers.{elevenlabs,gemini}` so switching providers no longer overwrites keys
 - **`audio.getTTSOptions`** — verified model/voice catalogue for the settings UI
@@ -16,17 +18,23 @@ Fork of [Atlas](https://github.com/dortanes/atlas) v0.2.3. Full rationale and au
 - **`system.openSettings`** — open Settings from the widget
 - **`ui.accent`** — `ultron` (fixed crimson) or `system` (OS accent)
 - **Original icon artwork** — `scripts/generate-icons.py` (graphite plate, segmented crimson ring, hexagon core)
-- **Verification pipeline** — `npm run typecheck` (renderer + main), `npm test` (vitest, 45 tests), `tsconfig.electron.json`
+- **Verification pipeline** — `npm run typecheck` (renderer + main), `npm test` (vitest, 62 tests), `tsconfig.electron.json`
 
 ## [Changed]
-- **Branding** — package name/description/repository, `productName`/`appId`/`executableName`/`artifactName`, window title, tray labels, prompts, README, About page (with Atlas attribution)
-- **User-data path is preserved** — a previous Atlas/Ultron user-data directory is reused instead of starting from an empty one
-- **Default persona** — displayed as **Ultron**; id stays `atlas-default` for compatibility, customised fields are never overwritten
+- **Branding** — package name/description/repository, `productName`/`appId`/`executableName`/`artifactName`, window title, tray labels, prompts, settings copy, docs and issue templates
+- **Clean-slate user data** — `app.setName('Ultron')` gives a dedicated user-data directory from the first launch; no migration code and no probe of earlier directories
+- **Default persona** — displayed as **Ultron**; the record id stays `atlas-default` because `activePersonaId` and per-persona prompt folders are keyed by it
 - **Config merging** — recursive deep merge so nested groups (`tts.providers.*`) survive partial saves
 - **TTS errors** — provider-aware messages (`ttsErrors.ts`) naming the failing provider and the fix
 - **Audio format reporting** — `BaseTTSProvider.audioFormat` replaces the hard-coded `'mpeg' | 'opus'` union
 - **Voice tab** — rebuilt around providers, with key masking, verified pickers, custom ids and an inline test result
 - **CI artifact** — `ultron-windows-x64`
+
+## [Fixed]
+- **Gemini TTS rejected every request** — the Interactions payload sent `{ type: 'text', text }` instead of the documented `user_input` content block, and the installed SDK (1.45.0) predates the 2.24.0 the endpoint requires. The provider now uses `generateContent` first, keeps Interactions as a fallback, and logs Google's raw error instead of a generic rejection
+- **Retired model ids** — a 404 now retries at most two documented fallbacks (logged) instead of failing outright
+- **Opaque TTS errors** — mapped messages append the provider's own words, truncated; status-only wrappers are suppressed
+- **Dead microphone control** — the widget mic is dormant but clickable when voice input is off, and its tooltip states the real reason it is idle
 
 ## [Preserved]
 - Agent engine, computer-use loop, planning, personas, memory, facts, search, prompts, settings layout

@@ -72,7 +72,7 @@ export default defineComponent({
       <div class="settings-tab">
         <h3 class="settings-tab__title">Facts</h3>
         <p class="facts-description">
-          Knowledge that Atlas remembers about you. Facts are extracted automatically from conversations and can be edited manually.
+          Knowledge that Ultron remembers about you. Facts are extracted automatically from conversations and can be edited manually.
         </p>
 
         {/* Add fact input */}
@@ -100,7 +100,7 @@ export default defineComponent({
         ) : this.facts.length === 0 ? (
           <div class="facts-empty">
             <span class="facts-empty__icon">lightbulb</span>
-            <span>No facts yet. Start chatting and Atlas will learn about you!</span>
+            <span>No facts yet. Start chatting and Ultron will learn about you!</span>
           </div>
         ) : (
           <>

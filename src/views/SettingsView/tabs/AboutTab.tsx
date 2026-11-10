@@ -75,13 +75,13 @@ export default defineComponent({
           </button>
         </div>
 
-        {/* Upstream attribution — required by the Apache-2.0 license */}
+        {/* Licence notice — attribution required by Apache-2.0 */}
         <div class="about-page__attribution">
-          Built on{' '}
+          Apache-2.0 · based on{' '}
           <button class="voice-link-btn" onClick={() => this.openExternal('https://github.com/dortanes/atlas')}>
             Atlas
           </button>{' '}
-          by dortanes. Licensed under Apache-2.0.
+          by dortanes
         </div>
       </div>
     )
