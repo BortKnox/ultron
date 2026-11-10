@@ -404,7 +404,7 @@ function clearSilenceTimer(): void {
   }
 }
 
-function submitTranscript(): void {
+async function submitTranscript(): Promise<void> {
   const fullText = chunks.value.join(' ').trim()
   if (!fullText) return
 
@@ -415,31 +415,19 @@ function submitTranscript(): void {
   lastSubmitText = fullText
 
   console.info('[useSTT] Auto-submit:', fullText)
-  // Vosk/browser audio graphs can remain in a completed state after a final
-  // result. Tear down the old capture before the agent starts processing, then
-  // let auto-listen create a completely fresh stream/recognizer below.
-  void resetCaptureAfterSubmit()
+  // Do not restart capture here. A background restart can race the agent's
+  // response/TTS and create a second audio graph while the first is closing.
+  // Await the hard teardown, then leave activation to an explicit user action
+  // (or the normal wake-word path after a user-enabled capture).
+  await resetCaptureAfterSubmit()
 
   const { sendCommand } = useAgent()
   sendCommand(fullText)
 }
 
-/** Stop the completed recognizer and optionally reacquire capture. */
+/** Stop the completed recognizer; never reacquire capture after submission. */
 async function resetCaptureAfterSubmit(): Promise<void> {
-  const shouldResumeWakeWord = autoListen.value
   await stopMic()
-
-  if (!shouldResumeWakeWord) return
-
-  try {
-    await startMic()
-    console.info('[useSTT] Reinitialized microphone after transcription')
-  } catch (err) {
-    console.error('[STT] Stream Failed: reinitialization', err)
-    console.error('[useSTT] Failed to reinitialize microphone:', err)
-    micError.value = describeMicError(err)
-    await stopMic()
-  }
 }
 
 // ── Error descriptions ──
