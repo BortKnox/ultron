@@ -36,6 +36,8 @@ const transcript = ref('')
 const chunks = ref<string[]>([])
 const isModelLoaded = ref(false)
 const isModelLoading = ref(false)
+/** True only while the current stream/context graph is live. */
+const hardwareActive = ref(false)
 /** Human-readable reason the microphone could not be enabled */
 const micError = ref('')
 /** Explicit opt-in for hands-free operation (mirrors config.stt.autoListen) */
@@ -171,14 +173,37 @@ async function startMic(): Promise<void> {
       noiseSuppression: true,
     },
   })
-  console.info(`[useSTT] MediaStream acquired (${mediaStream.id})`)
+  const stream = mediaStream
+  console.info(`[STT] Stream Acquired (${stream.id})`)
+
+  // A device/permission change can end a track without changing our phase.
+  // Treat that as a hardware failure and force the UI off immediately.
+  for (const track of stream.getTracks()) {
+    track.addEventListener('ended', () => {
+      if (mediaStream !== stream || generation !== captureGeneration) return
+      console.error(`[STT] Stream Failed: track ended (${track.kind})`)
+      void stopMic()
+    })
+  }
 
   audioContext = new AudioContext({ sampleRate })
-  sourceNode = audioContext.createMediaStreamSource(mediaStream)
+  const context = audioContext
+  if (context.state === 'suspended') await context.resume()
+  if (context.state !== 'running') {
+    throw new Error(`AudioContext did not reach running state (state: ${context.state})`)
+  }
+  context.addEventListener('statechange', () => {
+    if (audioContext !== context || generation !== captureGeneration) return
+    if (context.state === 'closed') {
+      console.error('[STT] Stream Failed: AudioContext closed unexpectedly')
+      void stopMic()
+    }
+  })
+  sourceNode = context.createMediaStreamSource(stream)
 
   // Use AudioWorklet if available (off-main-thread), fallback to ScriptProcessor
-  await audioContext.audioWorklet.addModule(createWorkletBlob())
-  workletNode = new AudioWorkletNode(audioContext, 'stt-processor')
+  await context.audioWorklet.addModule(createWorkletBlob())
+  workletNode = new AudioWorkletNode(context, 'stt-processor')
   workletNode.port.onmessage = (e) => {
     if (!recognizer) return
     // During TTS: only process audio for wake word detection (idle phase)
@@ -186,16 +211,18 @@ async function startMic(): Promise<void> {
     if (ttsSpeaking && phase.value !== 'idle') return
 
     const samples = e.data as Float32Array
-    const buf = audioContext!.createBuffer(1, samples.length, sampleRate)
+    if (audioContext !== context || context.state === 'closed') return
+    const buf = context.createBuffer(1, samples.length, sampleRate)
     buf.getChannelData(0).set(samples)
     recognizer.acceptWaveform(buf)
   }
   sourceNode.connect(workletNode)
-  workletNode.connect(audioContext.destination)
+  workletNode.connect(context.destination)
 
+  hardwareActive.value = true
   phase.value = 'idle'
   initVisibilityWatch()
-  console.info('[useSTT] Mic started, listening for wake word...')
+  console.info('[STT] Capture Live — listening for wake word')
 }
 
 /** Release every renderer-owned capture resource before a future start. */
@@ -224,7 +251,7 @@ function releaseCaptureResources(): Promise<void> {
     const tracks = oldStream?.getTracks() ?? []
     tracks.forEach((track) => track.stop())
     if (oldStream || oldContext || oldRecognizer) {
-      console.info(`[useSTT] MediaStream released (${tracks.length} track(s))`)
+      console.info(`[STT] Stream Released (${tracks.length} track(s))`)
     }
 
     oldRecognizer?.remove()
@@ -246,12 +273,12 @@ function releaseCaptureResources(): Promise<void> {
 
 async function stopMic(): Promise<void> {
   captureGeneration += 1
-  await releaseCaptureResources()
-
+  hardwareActive.value = false
   phase.value = 'off'
   transcript.value = ''
   chunks.value = []
   api.audio.stopListening.mutate().catch(() => {})
+  await releaseCaptureResources()
 }
 
 // ── AudioWorklet (inlined as blob) ──
@@ -408,6 +435,7 @@ async function resetCaptureAfterSubmit(): Promise<void> {
     await startMic()
     console.info('[useSTT] Reinitialized microphone after transcription')
   } catch (err) {
+    console.error('[STT] Stream Failed: reinitialization', err)
     console.error('[useSTT] Failed to reinitialize microphone:', err)
     micError.value = describeMicError(err)
     await stopMic()
@@ -443,6 +471,7 @@ async function enable(): Promise<void> {
   try {
     await startMic()
   } catch (err) {
+    console.error('[STT] Stream Failed: start', err)
     console.error('[useSTT] Failed to enable microphone:', err)
     micError.value = describeMicError(err)
     // Make sure a half-started capture cannot linger
@@ -463,9 +492,9 @@ function setAutoListen(enabled: boolean): void {
 // ── Composable ──
 
 export function useSTT() {
-  const isActivated = computed(() => phase.value === 'activated' || phase.value === 'listening')
-  /** True while the microphone is actually capturing audio */
-  const micActive = computed(() => phase.value !== 'off')
+  const isActivated = computed(() => hardwareActive.value && (phase.value === 'activated' || phase.value === 'listening'))
+  /** True only while the stream, context and worklet are live. */
+  const micActive = computed(() => hardwareActive.value)
 
   return {
     phase,
@@ -474,6 +503,7 @@ export function useSTT() {
     isActivated,
     micActive,
     micError,
+    hardwareActive,
     autoListen,
     isModelLoaded,
     isModelLoading,
