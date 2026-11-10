@@ -27,6 +27,12 @@ export interface UIConfig {
   soundEnabled: boolean
   /** Sound effects volume (0.0 – 1.0) */
   soundVolume: number
+  /**
+   * Accent colour source.
+   * - `ultron` — fixed crimson accent (default identity)
+   * - `system` — follow the OS accent colour
+   */
+  accent: 'ultron' | 'system'
 }
 
 export interface LLMConfig {
@@ -60,16 +66,48 @@ export interface GenerationConfig {
 }
 
 export interface TTSConfig {
-  /** TTS provider name */
+  /** Active TTS provider: 'elevenlabs' | 'yandex-alice' | 'gemini' */
   provider: string
-  /** TTS API key (e.g. ElevenLabs) */
+  /**
+   * @deprecated Legacy single-provider credentials.
+   * Kept so Atlas-era configs keep their values; migrated into
+   * `providers.*` on load and no longer read by TTSService.
+   */
   apiKey: string
-  /** TTS voice ID */
+  /** @deprecated — see {@link TTSConfig.apiKey} */
   voiceId: string
-  /** TTS model name */
+  /** @deprecated — see {@link TTSConfig.apiKey} */
   model: string
-  /** Whether TTS is enabled */
+  /** Whether spoken responses are enabled (independent of the microphone) */
   enabled: boolean
+  /**
+   * Per-provider configuration. Each provider keeps its own credentials,
+   * so switching the active provider never overwrites another one.
+   */
+  providers: TTSProvidersConfig
+}
+
+/** ElevenLabs credentials + voice/model selection */
+export interface ElevenLabsTTSConfig {
+  apiKey: string
+  voiceId: string
+  model: string
+}
+
+/** Google Gemini TTS credentials + voice/model selection */
+export interface GeminiTTSConfig {
+  /** Gemini API key from Google AI Studio (independent of the LLM key) */
+  apiKey: string
+  /** Gemini TTS model id (e.g. 'gemini-3.8-flash-lite-tts') */
+  model: string
+  /** Prebuilt Gemini voice name (e.g. 'Kore') */
+  voice: string
+}
+
+/** Container for all provider-specific TTS settings */
+export interface TTSProvidersConfig {
+  elevenlabs: ElevenLabsTTSConfig
+  gemini: GeminiTTSConfig
 }
 
 export interface AgentConfig {
@@ -102,6 +140,12 @@ export interface STTConfig {
   enabled: boolean
   /** Language code for model selection (e.g. 'en', 'ru') */
   language: string
+  /**
+   * Explicit opt-in: start microphone capture automatically on launch.
+   * When false, the microphone stays off until the user enables it
+   * (from the widget or Settings). Runtime capture state is never persisted.
+   */
+  autoListen: boolean
 }
 
 // ═══════════════════════════════════════════════════════════════

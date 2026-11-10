@@ -2561,3 +2561,100 @@
   border-left: 3px solid hsl(var(--glass-accent-h) var(--glass-accent-s) var(--glass-accent-l) / 0.5);
   border-radius: 12px;
 }
+
+/* ── Voice: provider configuration ────────────────────────────── */
+
+/* Inline "Show/Hide" control next to the API key label */
+.settings-field__label--split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.voice-key-toggle,
+.voice-link-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--color-ultron-crimson-soft);
+  cursor: pointer;
+  transition: color 150ms ease, opacity 150ms ease;
+}
+
+.voice-key-toggle:hover,
+.voice-link-btn:hover {
+  color: var(--color-ultron-silver);
+}
+
+.voice-key-toggle:focus-visible,
+.voice-link-btn:focus-visible {
+  outline: 2px solid var(--color-ultron-crimson);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.voice-link-btn {
+  margin-left: 6px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Provider explanation block (e.g. Yandex Alice needs no key) */
+.voice-provider-note {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255 255 255 / 0.02);
+  border: 1px solid rgba(255 255 255 / 0.06);
+  border-left: 2px solid hsl(var(--glass-accent-h) var(--glass-accent-s) var(--glass-accent-l) / 0.45);
+  font-size: 12px;
+  line-height: 1.6;
+  color: oklch(0.6 0 0);
+}
+
+/* Test voice row */
+.voice-test {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.voice-test__result {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.voice-test__result--ok {
+  color: oklch(0.78 0.14 155);
+}
+
+.voice-test__result--error {
+  color: oklch(0.75 0.17 25);
+}
+
+/* Small print under the TTS card */
+.voice-note {
+  margin-top: 12px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: oklch(0.45 0 0);
+}
+
+/* ── About: upstream attribution ── */
+.about-page__attribution {
+  margin-top: 18px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: oklch(0.45 0 0);
+  text-align: center;
+}

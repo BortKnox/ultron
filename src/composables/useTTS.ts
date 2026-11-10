@@ -2,20 +2,32 @@ import { ref } from 'vue'
 import { api } from '@/api'
 
 /**
- * useTTS — TTS audio playback with dual-format support.
+ * useTTS — TTS audio playback with multi-format support.
  *
- * Supports two playback modes based on the provider's audio format:
+ * Picks a playback pipeline from the provider's reported audio format:
  * - **mpeg**: streaming via MediaSource Extensions (MSE)
- * - **opus**: complete buffer via blob URL + Audio element
+ * - **opus**: complete buffer (Ogg/Opus) via blob URL + Audio element
+ * - **wav**: complete buffer (RIFF/WAVE) via blob URL + Audio element
+ *
+ * The format always describes the bytes the provider actually sent — Gemini
+ * TTS returns a WAV container, so it never goes through the MSE (mpeg) path.
  *
  * Subscribes to `audio.onTTSFormat`, `audio.onTTSAudio`, `audio.onTTSStatus`.
  *
  * Usage: call `useTTS()` once in MainView setup — it auto-subscribes.
  */
 
+type TTSFormat = 'mpeg' | 'opus' | 'wav'
+
+/** MIME type used when building the blob URL for buffered providers */
+const BLOB_MIME: Record<Exclude<TTSFormat, 'mpeg'>, string> = {
+  opus: 'audio/ogg; codecs=opus',
+  wav: 'audio/wav',
+}
+
 const speaking = ref(false)
 
-let currentFormat: 'mpeg' | 'opus' = 'mpeg'
+let currentFormat: TTSFormat = 'mpeg'
 let mediaSource: MediaSource | null = null
 let sourceBuffer: SourceBuffer | null = null
 let audioElement: HTMLAudioElement | null = null
@@ -124,7 +136,7 @@ function endStreamMSE() {
   waitForFlush()
 }
 
-// ── Blob URL pipeline (for opus / non-streaming) ──
+// ── Blob URL pipeline (for opus / wav / any buffered provider) ──
 
 /** Collected chunks for non-streaming playback */
 let blobChunks: Uint8Array[] = []
@@ -163,7 +175,8 @@ function endStreamBlob() {
     offset += c.length
   }
 
-  const blob = new Blob([merged.buffer], { type: 'audio/ogg; codecs=opus' })
+  const mime = BLOB_MIME[currentFormat === 'mpeg' ? 'opus' : currentFormat]
+  const blob = new Blob([merged.buffer], { type: mime })
   const url = URL.createObjectURL(blob)
 
   if (!audioElement) audioElement = new Audio()
@@ -188,7 +201,7 @@ function initSubscriptions() {
 
   // TTS format (tells us which playback pipeline to use)
   api.audio.onTTSFormat.subscribe(undefined, {
-    onData(data: { format: 'mpeg' | 'opus' }) {
+    onData(data: { format: TTSFormat }) {
       currentFormat = data.format
     },
   })
@@ -200,7 +213,7 @@ function initSubscriptions() {
 
       if (data.speaking) {
         // New speech session — prepare playback pipeline
-        if (currentFormat === 'opus') {
+        if (currentFormat !== 'mpeg') {
           resetBlob()
         } else {
           resetMSE()
@@ -212,7 +225,7 @@ function initSubscriptions() {
   // TTS audio chunks
   api.audio.onTTSAudio.subscribe(undefined, {
     onData(data: { data: string; done: boolean }) {
-      if (currentFormat === 'opus') {
+      if (currentFormat !== 'mpeg') {
         if (data.done) {
           endStreamBlob()
         } else {

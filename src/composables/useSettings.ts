@@ -15,6 +15,8 @@ export interface UIConfig {
   debugLog: boolean
   soundEnabled: boolean
   soundVolume: number
+  /** Accent colour source: fixed Ultron crimson or the OS accent */
+  accent: 'ultron' | 'system'
 }
 
 export interface LLMConfig {
@@ -37,15 +39,37 @@ export interface GenerationConfig {
 
 export interface TTSConfig {
   provider: string
+  /** @deprecated legacy single-slot credentials (migrated on load) */
+  apiKey: string
+  /** @deprecated */
+  voiceId: string
+  /** @deprecated */
+  model: string
+  enabled: boolean
+  providers: TTSProvidersConfig
+}
+
+export interface ElevenLabsTTSConfig {
   apiKey: string
   voiceId: string
   model: string
-  enabled: boolean
+}
+
+export interface GeminiTTSConfig {
+  apiKey: string
+  model: string
+  voice: string
+}
+
+export interface TTSProvidersConfig {
+  elevenlabs: ElevenLabsTTSConfig
+  gemini: GeminiTTSConfig
 }
 
 export interface STTConfig {
   enabled: boolean
   language: string
+  autoListen: boolean
 }
 
 export interface AgentConfig {
@@ -79,6 +103,7 @@ export function useSettings() {
       debugLog: false,
       soundEnabled: true,
       soundVolume: 0.5,
+      accent: 'ultron',
     },
     llm: {
       provider: 'gemini',
@@ -102,10 +127,15 @@ export function useSettings() {
       voiceId: '',
       model: '',
       enabled: true,
+      providers: {
+        elevenlabs: { apiKey: '', voiceId: '', model: '' },
+        gemini: { apiKey: '', model: '', voice: '' },
+      },
     },
     stt: {
       enabled: false,
       language: 'en',
+      autoListen: false,
     },
     agent: {
       maxIterations: 15,

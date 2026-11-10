@@ -20,12 +20,24 @@ import path from 'node:path'
 import { createLogger } from '@electron/utils/logger'
 import type { AppConfig, DeepPartial } from './schema'
 import { defaultConfig } from './defaults'
-import { migrateFlat } from './migration'
+import { migrateConfig } from './migration'
 
 const log = createLogger('Config')
 
 // ── Re-exports ──
-export type { AppConfig, UIConfig, LLMConfig, GenerationConfig, TTSConfig, AgentConfig, DeepPartial } from './schema'
+export type {
+  AppConfig,
+  UIConfig,
+  LLMConfig,
+  GenerationConfig,
+  TTSConfig,
+  TTSProvidersConfig,
+  ElevenLabsTTSConfig,
+  GeminiTTSConfig,
+  STTConfig,
+  AgentConfig,
+  DeepPartial,
+} from './schema'
 export { defaultConfig } from './defaults'
 
 // ── Singleton ──
@@ -37,20 +49,35 @@ function getConfigPath(): string {
   return path.join(app.getPath('userData'), 'Config')
 }
 
-/** Deep-merge source into target (two-level deep for nested groups) */
-function merge(target: AppConfig, source: DeepPartial<AppConfig>): AppConfig {
-  const result = { ...target } as unknown as Record<string, unknown>
-  const src = source as unknown as Record<string, unknown>
-  const tgt = target as unknown as Record<string, unknown>
-  for (const key of Object.keys(src)) {
-    const val = src[key]
-    if (val !== undefined && typeof val === 'object' && !Array.isArray(val) && typeof tgt[key] === 'object') {
-      result[key] = { ...(tgt[key] as object), ...(val as object) }
-    } else if (val !== undefined) {
-      result[key] = val
-    }
+/** True for plain objects (not arrays, not class instances) */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Recursively merge `source` into `target`.
+ *
+ * Nested groups (e.g. `tts.providers.gemini`) are merged key-by-key instead of
+ * being replaced wholesale, so a partial save never drops sibling values and
+ * newly added defaults always reach existing configs. `undefined` values in
+ * `source` are ignored; arrays are treated as values and replaced.
+ */
+function mergeConfig(target: unknown, source: unknown): unknown {
+  if (!isPlainObject(target) || !isPlainObject(source)) return source
+
+  const result: Record<string, unknown> = { ...target }
+  for (const [key, val] of Object.entries(source)) {
+    if (val === undefined) continue
+    result[key] = isPlainObject(val) && isPlainObject(target[key])
+      ? mergeConfig(target[key], val)
+      : val
   }
-  return result as unknown as AppConfig
+  return result
+}
+
+/** Deep-merge a partial config into the given base config */
+function merge(target: AppConfig, source: DeepPartial<AppConfig>): AppConfig {
+  return mergeConfig(target, source) as AppConfig
 }
 
 // ── Public API ──
@@ -62,7 +89,7 @@ export function loadConfig(): AppConfig {
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf-8')
       let parsed = JSON.parse(raw)
-      parsed = migrateFlat(parsed)
+      parsed = migrateConfig(parsed)
       currentConfig = merge(defaultConfig, parsed)
       saveConfig({}) // persist any new default fields + clean migrated keys
       log.info('Loaded config from', filePath)

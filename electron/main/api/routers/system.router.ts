@@ -86,13 +86,21 @@ export const systemRouter = trpcRouter({
     mainEventBus.emit('system:close-settings')
   }),
 
+  /**
+   * Open the settings panel (used by the widget's settings shortcut).
+   * Reuses the same event the tray menu emits, so window visibility,
+   * click-through handling and the renderer route all behave identically.
+   */
+  openSettings: publicProcedure.mutation(() => {
+    mainEventBus.emit('system:open-settings')
+  }),
 
-  /** Hide the Atlas window (triggered by Escape from renderer) */
+  /** Hide the agent window (triggered by Escape from renderer) */
   hideWindow: publicProcedure.mutation(() => {
     forceHideWindow()
   }),
 
-  /** Show the Atlas window (triggered by STT wake word) */
+  /** Show the agent window (triggered by STT wake word) */
   showWindow: publicProcedure.mutation(() => {
     showWindow()
   }),

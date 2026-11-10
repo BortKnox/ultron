@@ -9,26 +9,35 @@
   --color-glass-hover: rgba(255 255 255 / 0.10);
   --color-glass-border: rgba(255 255 255 / 0.08);
   --color-glass-active: rgba(255 255 255 / 0.14);
-
   --color-accent: oklch(0.7 0.18 240);
   --color-accent-glow: oklch(0.7 0.18 240 / 0.4);
   --color-accent-dim: oklch(0.5 0.12 240);
-
   --color-warning: oklch(0.75 0.15 60);
   --color-warning-glow: oklch(0.75 0.15 60 / 0.4);
-
   --color-danger: oklch(0.65 0.2 25);
   --color-danger-glow: oklch(0.65 0.2 25 / 0.4);
-
   --color-success: oklch(0.72 0.17 155);
-
   --blur-glass: 20px;
   --blur-heavy: 40px;
   --radius-glass: 16px;
   --radius-pill: 9999px;
-
   --spring-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --spring-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* ── Ultron Brand Palette ──
+   Graphite and gunmetal surfaces with a restrained crimson accent.
+   Kept as explicit tokens so widgets, settings and islands stay consistent.
+   (Original palette — no third-party character artwork.) */
+@theme {
+  --color-ultron-crimson: oklch(0.56 0.2 22);
+  --color-ultron-crimson-soft: oklch(0.72 0.16 24);
+  --color-ultron-crimson-dim: oklch(0.42 0.13 22);
+  --color-ultron-graphite-900: oklch(0.13 0.006 260);
+  --color-ultron-graphite-800: oklch(0.17 0.008 260);
+  --color-ultron-graphite-700: oklch(0.23 0.009 260);
+  --color-ultron-silver: oklch(0.82 0.006 260);
+  --color-ultron-gold: oklch(0.75 0.09 80);
 }
 
 /* ── Base Glass Class ── */
@@ -40,9 +49,10 @@
 
 /* Accent color defaults (overridden by JS at runtime) */
 html {
-  --glass-accent-h: 240;
-  --glass-accent-s: 60%;
-  --glass-accent-l: 35%;
+  /* Ultron crimson — matches useAccentColor()'s ULTRON_ACCENT */
+  --glass-accent-h: 352;
+  --glass-accent-s: 72%;
+  --glass-accent-l: 42%;
 }
 
 .glass {

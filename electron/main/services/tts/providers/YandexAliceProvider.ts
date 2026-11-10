@@ -15,6 +15,9 @@ const log = createLogger('YandexAliceProvider')
 export class YandexAliceProvider extends BaseTTSProvider {
   readonly name = 'yandex-alice'
 
+  /** Alice returns a complete Ogg/Opus buffer */
+  readonly audioFormat = 'opus' as const
+
   private client: YandexAliceClient
   private connected = false
 

@@ -10,6 +10,8 @@ import ResponseIsland from '@/components/islands/ResponseIsland'
 import SearchIsland from '@/components/islands/SearchIsland'
 import InputBar from '@/components/input/InputBar'
 import ListeningIsland from '@/components/islands/ListeningIsland'
+import WidgetControls from '@/components/controls/WidgetControls'
+import ListeningIndicator from '@/components/controls/ListeningIndicator'
 import { useAgent } from '@/composables/useAgent'
 import { usePermissions } from '@/composables/usePermissions'
 import { useWarnings } from '@/composables/useWarnings'
@@ -18,7 +20,7 @@ import { useResponse } from '@/composables/useResponse'
 import { useSearch } from '@/composables/useSearch'
 import { useAccentColor } from '@/composables/useAccentColor'
 import { useSounds } from '@/composables/useSounds'
-import { useTTS } from '@/composables/useTTS'
+import { useTTS, stopPlayback } from '@/composables/useTTS'
 import { useSTT } from '@/composables/useSTT'
 import { api } from '@/api'
 
@@ -26,7 +28,12 @@ import { api } from '@/api'
  * MainView — primary layout container.
  *
  * Layout (top → bottom):
- *   Notifications → spacer → Task Queue → Orb → InputBar (on demand)
+ *   Notifications → spacer → Task Queue → Orb → Widget Controls → InputBar
+ *
+ * The widget controls expose microphone capture and spoken responses without
+ * opening Settings. Both switches drive real runtime state:
+ * - microphone → useSTT (actual audio capture; `micActive` is derived from it)
+ * - speaker    → tts.enabled (actual voice output)
  *
  * Click-through: transparent areas pass clicks to the desktop.
  * Keyboard shortcut: "/" or "Ctrl+K" toggles InputBar.
@@ -41,7 +48,7 @@ export default defineComponent({
     /* ── Composables (intermediate I/O layer) ── */
     const { state: agentState, currentAction, sendCommand } = useAgent()
     const { permissions, respond: respondPermission } = usePermissions()
-    const { warnings, dismiss: dismissWarning } = useWarnings()
+    const { warnings, dismiss: dismissWarning, push: pushWarning } = useWarnings()
     const { tasks, setTasks, progressPercent, progressLabel } = useMicrotasks()
     const { response, dismissing: responseDismissing, dismiss: dismissResponse } = useResponse()
     const { searchData, dismissing: searchDismissing, dismiss: dismissSearch, clear: clearSearch, openFile, revealFile } = useSearch()
@@ -49,21 +56,118 @@ export default defineComponent({
     /* ── UI Position (from config, reactive) ── */
     const positionSide = ref<'left' | 'right' | 'center'>('right')
 
-    // Load initial position
+    /* ── Voice state ── */
+    /** Persisted "spoken responses" preference */
+    const speechEnabled = ref(true)
+    /** Persisted "voice input allowed" preference */
+    const voiceEnabled = ref(false)
+    const micBusy = ref(false)
+
+    /* ── STT (explicit microphone lifecycle; micActive is the real capture state) ── */
+    const {
+      isActivated,
+      transcript: sttTranscript,
+      chunks: sttChunks,
+      micActive,
+      micError,
+      isModelLoading,
+      enable: enableSTT,
+      disable: disableSTT,
+      setAutoListen,
+    } = useSTT()
+
+    /* ── TTS Audio Playback (MSE / blob) ── */
+    useTTS()
+
+    /**
+     * Microphone toggle — starts or stops actual capture.
+     *
+     * Enabling capture also turns the voice-input preference on, so Settings
+     * never disagrees with what the widget is doing. Disabling only stops
+     * capture; the preference is left untouched.
+     */
+    async function toggleMic() {
+      if (micBusy.value) return
+
+      if (micActive.value) {
+        disableSTT()
+        return
+      }
+
+      micBusy.value = true
+      try {
+        if (!voiceEnabled.value) {
+          voiceEnabled.value = true
+          await api.settings.saveConfig.mutate({ stt: { enabled: true } })
+        }
+
+        await enableSTT()
+
+        // useSTT reports capture failures instead of throwing, so the widget
+        // can show a specific, actionable warning (permission, missing model…)
+        if (micError.value) {
+          pushWarning({ id: 'mic-error', message: micError.value, dismissable: true })
+        }
+      } catch (err) {
+        pushWarning({
+          id: 'mic-error',
+          message: err instanceof Error ? err.message : 'Microphone could not be started.',
+          dismissable: true,
+        })
+      } finally {
+        micBusy.value = false
+      }
+    }
+
+    /** Speaker toggle — mutes/unmutes voice output only (never the microphone) */
+    async function toggleSpeech() {
+      const next = !speechEnabled.value
+      speechEnabled.value = next
+
+      if (!next) {
+        // Stop anything already playing so "off" takes effect immediately
+        stopPlayback()
+        api.audio.stopSpeaking.mutate().catch(() => {})
+      }
+
+      try {
+        await api.settings.saveConfig.mutate({ tts: { enabled: next } })
+      } catch (err) {
+        console.error('[MainView] Failed to save spoken-response preference:', err)
+        speechEnabled.value = !next
+      }
+    }
+
+    function openSettings() {
+      api.system.openSettings.mutate().catch(() => {})
+    }
+
+    /* ── Load persisted preferences ── */
     api.settings.getConfig.query().then((cfg) => {
       positionSide.value = cfg.ui.positionSide || 'right'
+      voiceEnabled.value = cfg.stt.enabled
+      speechEnabled.value = cfg.tts.enabled
+      setAutoListen(Boolean(cfg.stt.autoListen && cfg.stt.enabled))
+
+      // Wake-word capture only starts on launch when the user opted in
+      if (cfg.stt.enabled && cfg.stt.autoListen) {
+        enableSTT().catch(() => {})
+      }
+    }).catch((err) => {
+      console.error('[MainView] Failed to load config:', err)
     })
 
-    // Subscribe to config changes for live position updates + STT toggle
+    // Keep widget switches in sync with config changes made anywhere else
     const configSub = api.settings.onConfigChange.subscribe(undefined, {
       onData(cfg) {
         positionSide.value = cfg.ui.positionSide || 'right'
-        // Toggle STT dynamically on config change
-        if (cfg.stt.enabled && !sttEnabled.value) {
-          sttEnabled.value = true
-          enableSTT()
-        } else if (!cfg.stt.enabled && sttEnabled.value) {
-          sttEnabled.value = false
+        speechEnabled.value = cfg.tts.enabled
+        voiceEnabled.value = cfg.stt.enabled
+        setAutoListen(Boolean(cfg.stt.autoListen && cfg.stt.enabled))
+
+        // Voice input disabled in Settings must stop capture immediately
+        if (!cfg.stt.enabled && micActive.value) {
+          disableSTT()
         }
       },
     })
@@ -76,24 +180,11 @@ export default defineComponent({
       api.system.setIgnoreMouseEvents.mutate({ ignore: true, forward: true })
     }
 
-    /* ── OS Accent Color (smooth animated via tRPC subscription) ── */
+    /* ── Accent Color (Ultron crimson or OS accent) ── */
     useAccentColor()
 
     /* ── Sound Effects ── */
     const sfx = useSounds()
-
-    /* ── TTS Audio Playback (MSE streaming) ── */
-    useTTS()
-
-    /* ── STT (always-on voice input) ── */
-    const { isActivated, transcript: sttTranscript, chunks: sttChunks, enable: enableSTT } = useSTT()
-    const sttEnabled = ref(false)
-
-    // Auto-enable STT if configured
-    api.settings.getConfig.query().then((cfg) => {
-      sttEnabled.value = cfg.stt.enabled
-      if (cfg.stt.enabled) enableSTT()
-    })
 
     /* ── Agent Visibility (toggled from tray or Ctrl+Space) ── */
     const agentVisible = ref(true)
@@ -110,8 +201,8 @@ export default defineComponent({
         agentVisible.value = visible
         if (visible) {
           sfx.activate()
-          // Only auto-show InputBar if STT is OFF
-          if (!sttEnabled.value) {
+          // Only auto-show InputBar when the microphone is off
+          if (!micActive.value) {
             inputDismissing.value = false
             showInput.value = true
           }
@@ -179,7 +270,7 @@ export default defineComponent({
       }, 400)
     }
 
-    /* ── Escape key — close InputBar or hide Atlas ── */
+    /* ── Escape key — close InputBar or hide the agent ── */
     function onEscapeKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return
       if (!agentVisible.value) return
@@ -202,8 +293,8 @@ export default defineComponent({
           sfx.processing()
         } else if (data.state === 'idle' && (prevState === 'processing' || prevState === 'acting')) {
           sfx.responseReady()
-          // Auto-show InputBar for follow-up — only if STT is OFF
-          if (agentVisible.value && !sttEnabled.value) {
+          // Auto-show InputBar for follow-up — only when the mic is off
+          if (agentVisible.value && !micActive.value) {
             setTimeout(() => {
               inputDismissing.value = false
               showInput.value = true
@@ -257,6 +348,14 @@ export default defineComponent({
       isActivated,
       sttTranscript,
       sttChunks,
+      micActive,
+      micBusy,
+      micLoading: isModelLoading,
+      speechEnabled,
+      voiceEnabled,
+      toggleMic,
+      toggleSpeech,
+      openSettings,
     }
   },
 
@@ -269,6 +368,9 @@ export default defineComponent({
 
         {/* Agent cursor overlay — rendered above everything */}
         <AgentCursor />
+
+        {/* Persistent mic state — visible even when the widget is collapsed */}
+        <ListeningIndicator active={this.micActive} positionSide={this.positionSide} />
 
         <div class={['main-view__stack', !this.agentVisible && 'main-view__stack--hidden']}>
           {/* Notifications — priority ordered */}
@@ -362,6 +464,23 @@ export default defineComponent({
           >
             <AgentOrb state={this.agentState} />
             <span class="main-view__state-label">{this.agentState}</span>
+          </div>
+
+          {/* Widget controls — mic + speech + settings, always one click away */}
+          <div
+            class="main-view__controls"
+            onMouseenter={this.onMouseEnterUI}
+            onMouseleave={this.onMouseLeaveUI}
+          >
+            <WidgetControls
+              micActive={this.micActive}
+              micBusy={this.micBusy || this.micLoading}
+              speechEnabled={this.speechEnabled}
+              micHint="Start voice input (requires a downloaded speech model)"
+              onToggleMic={this.toggleMic}
+              onToggleSpeech={this.toggleSpeech}
+              onOpenSettings={this.openSettings}
+            />
           </div>
 
           {/* Input Bar — always in DOM for smooth height transition */}

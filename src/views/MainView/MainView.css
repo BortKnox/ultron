@@ -92,6 +92,16 @@
   font-weight: 500;
 }
 
+/* Widget controls — compact toolbar under the orb */
+.main-view__controls {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  flex-shrink: 0;
+  padding: 2px 0 6px;
+  pointer-events: auto;
+}
+
 .main-view__input-area {
   width: 100%;
   flex-shrink: 0;

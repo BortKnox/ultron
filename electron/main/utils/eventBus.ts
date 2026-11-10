@@ -108,7 +108,7 @@ export interface MainEvents {
   /** TTS speaking status changed */
   'tts:status': [payload: { speaking: boolean }]
   /** TTS audio format for current provider */
-  'tts:format': [payload: { format: 'mpeg' | 'opus' }]
+  'tts:format': [payload: { format: TTSAudioFormat }]
   /** TTS audio chunk (streaming) */
   'tts:audio': [payload: { chunk: Buffer; done: boolean }]
   /** Request TTS to speak text */
@@ -116,3 +116,4 @@ export interface MainEvents {
   /** Request TTS to stop */
   'tts:stop': []
 }
+import type { TTSAudioFormat } from '@electron/services/tts/providers/BaseTTSProvider'

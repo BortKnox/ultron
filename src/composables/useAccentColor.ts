@@ -2,16 +2,27 @@ import { onMounted, onUnmounted } from 'vue'
 import { api } from '@/api'
 
 /**
- * useAccentColor — composable that subscribes to OS accent color
- * changes via tRPC and smoothly animates the CSS custom properties
- * `--glass-accent-h`, `--glass-accent-s`, `--glass-accent-l` on `:root`.
+ * useAccentColor — keeps the CSS accent custom properties in sync with the
+ * configured accent source (`ui.accent`):
+ *
+ * - `ultron` (default): the fixed Ultron crimson identity
+ * - `system`: the OS accent colour, as before
  *
  * Hue interpolation takes the shortest path around the 360° wheel
  * to avoid "disco" when jumping between distant hues (e.g. yellow → pink).
  */
+
+/** Ultron crimson — must match the `html` defaults in index.css */
+export const ULTRON_ACCENT = { h: 352, s: 72, l: 42 }
+
+type AccentSource = 'ultron' | 'system'
+
 export function useAccentColor() {
-  let unsub: (() => void) | null = null
-  let current = { h: 240, s: 60, l: 35 }
+  let unsubSystem: (() => void) | null = null
+  let unsubConfig: (() => void) | null = null
+  let current = { h: 352, s: 72, l: 42 }
+  let source: AccentSource = 'ultron'
+  let lastSystemAccent: { h: number; s: number; l: number } | null = null
   let animId = 0
   let debounceId = 0
 
@@ -61,20 +72,59 @@ export function useAccentColor() {
     animId = requestAnimationFrame(tick)
   }
 
+  /** Apply the accent that matches the current source */
+  function applyCurrentSource() {
+    if (source === 'ultron') {
+      animate(ULTRON_ACCENT)
+    } else if (lastSystemAccent) {
+      animate(lastSystemAccent)
+    }
+  }
+
   /** Debounced handler — Windows fires multiple events per change */
   function onAccentData(accent: { h: number; s: number; l: number }) {
+    lastSystemAccent = accent
+    if (source === 'ultron') return // identity accent wins until the user opts out
+
     clearTimeout(debounceId)
     debounceId = window.setTimeout(() => animate(accent), 100)
   }
 
-  onMounted(() => {
-    unsub = api.system.onAccentColorChange.subscribe(undefined, {
+  onMounted(async () => {
+    unsubSystem = api.system.onAccentColorChange.subscribe(undefined, {
       onData: onAccentData,
     }).unsubscribe
+
+    unsubConfig = api.settings.onConfigChange.subscribe(undefined, {
+      onData(cfg: { ui: { accent?: AccentSource } }) {
+        const next = cfg.ui.accent ?? 'ultron'
+        if (next === source) return
+        source = next
+        applyCurrentSource()
+      },
+    }).unsubscribe
+
+    try {
+      const cfg = await api.settings.getConfig.query()
+      source = cfg.ui.accent ?? 'ultron'
+    } catch {
+      source = 'ultron'
+    }
+
+    if (source === 'system' && !lastSystemAccent) {
+      try {
+        lastSystemAccent = await api.system.getAccentColor.query()
+      } catch {
+        // fall back to the identity accent
+      }
+    }
+
+    applyCurrentSource()
   })
 
   onUnmounted(() => {
-    unsub?.()
+    unsubSystem?.()
+    unsubConfig?.()
     cancelAnimationFrame(animId)
     clearTimeout(debounceId)
   })

@@ -90,22 +90,38 @@ export default defineComponent({
                 <span class="settings-row__hint">Where Atlas appears on screen</span>
               </div>
               <div class="settings-row__control">
-                <CustomSelect
-                  modelValue={ui.positionSide}
-                  onUpdate:modelValue={(v: string) => { ui.positionSide = v as 'left' | 'right' | 'center' }}
-                  options={[
-                    { value: 'left', label: 'Left' },
-                    { value: 'center', label: 'Center' },
-                    { value: 'right', label: 'Right' },
-                  ]}
-                />
+                  <CustomSelect
+                    modelValue={ui.positionSide}
+                    onUpdate:modelValue={(v: string) => { ui.positionSide = v as 'left' | 'right' | 'center' }}
+                    options={[
+                      { value: 'left', label: 'Left' },
+                      { value: 'center', label: 'Center' },
+                      { value: 'right', label: 'Right' },
+                    ]}
+                  />
+                </div>
               </div>
-            </div>
-            <div class="settings-row">
-              <div class="settings-row__info">
-                <span class="settings-row__label">Global Hotkey</span>
-                <span class="settings-row__hint">Toggle Atlas visibility</span>
+              <div class="settings-row">
+                <div class="settings-row__info">
+                  <span class="settings-row__label">Accent</span>
+                  <span class="settings-row__hint">Ultron identity colour or your OS accent</span>
+                </div>
+                <div class="settings-row__control">
+                  <CustomSelect
+                    modelValue={ui.accent}
+                    onUpdate:modelValue={(v: string) => { ui.accent = v as 'ultron' | 'system' }}
+                    options={[
+                      { value: 'ultron', label: 'Ultron (crimson)' },
+                      { value: 'system', label: 'System' },
+                    ]}
+                  />
+                </div>
               </div>
+              <div class="settings-row">
+                <div class="settings-row__info">
+                  <span class="settings-row__label">Global Hotkey</span>
+                  <span class="settings-row__hint">Toggle Atlas visibility</span>
+                </div>
               <div class="settings-row__control">
                 <div class="settings-hotkey">
                   <kbd class="settings-hotkey__key">{this.config.hotkey}</kbd>

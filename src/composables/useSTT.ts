@@ -7,14 +7,24 @@ import { stopPlayback } from './useTTS'
 /**
  * useSTT — voice-first speech-to-text composable.
  *
- * Flow:
- * 1. Vosk runs continuously in background (when enabled)
+ * ## Microphone lifecycle (explicit)
+ *
+ * Capture is a **runtime** state, never restored from disk:
+ * - `enable()` opens the microphone (loads the Vosk model first)
+ * - `disable()` closes it and releases the audio device
+ * - Nothing starts capture on launch unless `stt.autoListen` is enabled
+ *
+ * `micActive` reflects the real capture state, so the widget button and the
+ * microphone hardware can never disagree.
+ *
+ * ## Flow when the microphone is on
+ *
+ * 1. Vosk runs continuously in the background
  * 2. Detects wake word (persona name) in transcript
- * 3. Atlas window appears → ListeningIsland shows animated transcript
- * 4. Silence timer auto-submits command after ~1.5s pause
- * 5. Mic mutes during TTS playback (no feedback loop)
- * 6. Tray/hotkey opens → auto-activate listening (no wake word needed)
- * 7. Wake word during TTS → interrupt + new command
+ * 3. Window appears → ListeningIsland shows animated transcript
+ * 4. Silence timer auto-submits command after ~0.7–1.5s pause
+ * 5. Tray/hotkey opens the window → auto-activate only when `autoListen` is on
+ * 6. Wake word during TTS → interrupt + new command
  */
 
 // ── State ──
@@ -26,6 +36,10 @@ const transcript = ref('')
 const chunks = ref<string[]>([])
 const isModelLoaded = ref(false)
 const isModelLoading = ref(false)
+/** Human-readable reason the microphone could not be enabled */
+const micError = ref('')
+/** Explicit opt-in for hands-free operation (mirrors config.stt.autoListen) */
+const autoListen = ref(false)
 
 // ── Internals ──
 
@@ -58,7 +72,7 @@ function initTTSWatch() {
   })
 }
 
-// ── Visibility: auto-activate when Atlas shown via tray/hotkey ──
+// ── Visibility: auto-activate when shown via tray/hotkey ──
 
 let visibilitySubscribed = false
 
@@ -72,7 +86,8 @@ function initVisibilityWatch() {
       // Skip the initial `true` emitted on subscription connect
       if (isFirst) { isFirst = false; return }
 
-      if (visible && phase.value === 'idle') {
+      if (visible && phase.value === 'idle' && autoListen.value) {
+        // Hands-free mode only — otherwise showing the widget never starts listening
         activateWithoutWakeWord()
       } else if (!visible && (phase.value === 'activated' || phase.value === 'listening')) {
         // Agent hidden — cancel active listening, return to wake word mode
@@ -92,7 +107,7 @@ function activateWithoutWakeWord(): void {
   transcript.value = ''
   chunks.value = []
   api.audio.startListening.mutate()
-  console.info('[useSTT] Activated via tray/hotkey')
+  console.info('[useSTT] Activated via tray/hotkey (auto-listen)')
 }
 
 initTTSWatch()
@@ -104,6 +119,11 @@ async function loadModel(): Promise<void> {
 
   isModelLoading.value = true
   try {
+    const status = await api.audio.getSTTModelStatus.query()
+    if (!status.downloaded) {
+      throw new Error('Speech model not downloaded. Open Settings → Voice and download it first.')
+    }
+
     const Vosk = await import('vosk-browser')
     const { language } = (await api.settings.getConfig.query()).stt
 
@@ -167,17 +187,23 @@ async function startMic(): Promise<void> {
 
 function stopMic(): void {
   clearSilenceTimer()
+
   sourceNode?.disconnect()
   sourceNode = null
   audioContext?.close()
   audioContext = null
+
+  // Releasing the tracks is what actually turns the microphone off
   mediaStream?.getTracks().forEach((t) => t.stop())
   mediaStream = null
+
   recognizer?.remove()
   recognizer = null
+
   phase.value = 'off'
   transcript.value = ''
   chunks.value = []
+  api.audio.stopListening.mutate().catch(() => {})
 }
 
 // ── AudioWorklet (inlined as blob) ──
@@ -202,7 +228,7 @@ function createWorkletBlob(): string {
 
 function getWakeWord(): string {
   const { activePersona } = usePersonas()
-  const name = (activePersona.value?.name || 'atlas').toLowerCase()
+  const name = (activePersona.value?.name || 'ultron').toLowerCase()
   return name
 }
 
@@ -260,7 +286,7 @@ function activate(initialText: string): void {
   transcript.value = ''
   chunks.value = []
 
-  // Show Atlas window
+  // Show the agent window
   api.system.showWindow.mutate().catch(() => {})
   api.audio.startListening.mutate()
 
@@ -324,34 +350,71 @@ function submitTranscript(): void {
   api.audio.stopListening.mutate()
 }
 
+// ── Error descriptions ──
+
+/** Turn a getUserMedia / model failure into something a user can act on */
+function describeMicError(err: unknown): string {
+  if (err instanceof Error) {
+    const name = err.name
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      return 'Microphone access was denied. Allow microphone access for Ultron in your system privacy settings.'
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      return 'No microphone was found. Connect a microphone and try again.'
+    }
+    if (name === 'NotReadableError' || name === 'TrackStartError') {
+      return 'The microphone is busy — another application may be using it.'
+    }
+    return err.message || 'The microphone could not be started.'
+  }
+  return 'The microphone could not be started.'
+}
+
 // ── Public API ──
 
 async function enable(): Promise<void> {
   if (phase.value !== 'off') return
+  micError.value = ''
+
   try {
     await startMic()
   } catch (err) {
-    console.error('[useSTT] Failed to enable:', err)
+    console.error('[useSTT] Failed to enable microphone:', err)
+    micError.value = describeMicError(err)
+    // Make sure a half-started capture cannot linger
+    stopMic()
   }
 }
 
 function disable(): void {
+  micError.value = ''
   stopMic()
+}
+
+/** Mirror the persisted auto-listen preference into the runtime watcher */
+function setAutoListen(enabled: boolean): void {
+  autoListen.value = enabled
 }
 
 // ── Composable ──
 
 export function useSTT() {
   const isActivated = computed(() => phase.value === 'activated' || phase.value === 'listening')
+  /** True while the microphone is actually capturing audio */
+  const micActive = computed(() => phase.value !== 'off')
 
   return {
     phase,
     transcript,
     chunks,
     isActivated,
+    micActive,
+    micError,
+    autoListen,
     isModelLoaded,
     isModelLoading,
     enable,
     disable,
+    setAutoListen,
   }
 }

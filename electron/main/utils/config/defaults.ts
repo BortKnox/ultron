@@ -16,6 +16,7 @@ export const defaultConfig: AppConfig = {
     debugLog: false,
     soundEnabled: true,
     soundVolume: 0.5,
+    accent: 'ultron',
   },
   llm: {
     provider: 'gemini',
@@ -39,10 +40,23 @@ export const defaultConfig: AppConfig = {
     voiceId: 'JBFqnCBsd6RMkjVDRZzb',
     model: 'eleven_flash_v2_5',
     enabled: true,
+    providers: {
+      elevenlabs: {
+        apiKey: '',
+        voiceId: 'JBFqnCBsd6RMkjVDRZzb',
+        model: 'eleven_flash_v2_5',
+      },
+      gemini: {
+        apiKey: '',
+        model: 'gemini-3.8-flash-lite-tts',
+        voice: 'Kore',
+      },
+    },
   },
   stt: {
     enabled: false,
     language: 'en',
+    autoListen: false,
   },
   agent: {
     maxIterations: 15,

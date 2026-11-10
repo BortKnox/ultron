@@ -23,6 +23,7 @@ const uiSchema = z.object({
   debugLog: z.boolean().optional(),
   soundEnabled: z.boolean().optional(),
   soundVolume: z.number().min(0).max(1).optional(),
+  accent: z.enum(['ultron', 'system']).optional(),
 }).optional()
 
 const llmSchema = z.object({
@@ -45,10 +46,27 @@ const generationSchema = z.object({
 
 const ttsSchema = z.object({
   provider: z.string().optional(),
+  /** @deprecated legacy single-slot credentials (migrated on load) */
   apiKey: z.string().optional(),
+  /** @deprecated */
   voiceId: z.string().optional(),
+  /** @deprecated */
   model: z.string().optional(),
+  /** Spoken responses on/off — independent of the microphone */
   enabled: z.boolean().optional(),
+  /** Provider-specific credentials; switching providers never overwrites these */
+  providers: z.object({
+    elevenlabs: z.object({
+      apiKey: z.string().optional(),
+      voiceId: z.string().optional(),
+      model: z.string().optional(),
+    }).optional(),
+    gemini: z.object({
+      apiKey: z.string().optional(),
+      model: z.string().optional(),
+      voice: z.string().optional(),
+    }).optional(),
+  }).optional(),
 }).optional()
 
 const agentSchema = z.object({
@@ -65,6 +83,8 @@ const agentSchema = z.object({
 const sttSchema = z.object({
   enabled: z.boolean().optional(),
   language: z.string().optional(),
+  /** Explicit opt-in: start microphone capture on launch */
+  autoListen: z.boolean().optional(),
 }).optional()
 
 export const settingsRouter = trpcRouter({
