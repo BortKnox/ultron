@@ -1,4 +1,5 @@
 import * as path from 'node:path'
+import * as fs from 'node:fs'
 import { app, BrowserWindow, protocol, net } from 'electron'
 import { ServiceRegistry } from './services/ServiceRegistry'
 import { IntelligenceService } from './services/intelligence/IntelligenceService'
@@ -17,6 +18,7 @@ import { setMemoryService } from './api/routers/memory.router'
 import { setFactService } from './api/routers/facts.router'
 import { setAgentService } from './api/routers/agent.router'
 import { setSTTService } from './api/routers/audio.router'
+import { setTTSService } from './api/routers/audio.router'
 import { createLogger } from './utils/logger'
 import { loadConfig } from './utils/config'
 import { mainEventBus } from './utils/eventBus'
@@ -30,12 +32,48 @@ const log = createLogger('Main')
 
 // ── Platform Setup ──
 
-if (process.platform === 'win32') app.setAppUserModelId('com.dortanes.atlas')
+// Stable identity across dev and packaged builds ('atlas' before the fork)
+app.setName('Ultron')
+
+if (process.platform === 'win32') app.setAppUserModelId('com.bortknox.ultron')
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
   process.exit(0)
 }
+
+/**
+ * Keep Atlas-era user data when the application is renamed.
+ *
+ * Electron derives `userData` from the app name, so renaming Atlas → Ultron
+ * would otherwise point at a brand-new empty directory and silently forget
+ * the user's config, personas, memory, facts, prompts and downloaded models.
+ *
+ * If the new directory does not exist yet but a previous one contains a
+ * `Config` file (written by this app), the legacy directory is reused in
+ * place — nothing is copied, moved or deleted.
+ */
+function preserveLegacyUserData(): void {
+  try {
+    const appData = app.getPath('appData')
+    const current = path.join(appData, app.getName())
+
+    if (fs.existsSync(current)) return
+
+    for (const legacyName of ['Ultron', 'ultron', 'Atlas', 'atlas']) {
+      const candidate = path.join(appData, legacyName)
+      if (candidate === current) continue
+      if (fs.existsSync(path.join(candidate, 'Config'))) {
+        app.setPath('userData', candidate)
+        return
+      }
+    }
+  } catch {
+    // Never block startup because of the migration probe
+  }
+}
+
+preserveLegacyUserData()
 
 // Register custom protocol for serving STT model files to renderer
 protocol.registerSchemesAsPrivileged([
@@ -49,7 +87,7 @@ const services = new ServiceRegistry()
 // ── App Lifecycle ──
 
 app.whenReady().then(async () => {
-  log.info('Atlas starting...')
+  log.info('Ultron starting...')
 
   loadConfig()
 
@@ -97,6 +135,7 @@ app.whenReady().then(async () => {
   setFactService(facts)
   setAgentService(agent)
   setSTTService(stt)
+  setTTSService(tts)
 
   await services.initAll()
   await createWindow()
@@ -105,7 +144,7 @@ app.whenReady().then(async () => {
   // Global hotkey → toggle window visibility
   mainEventBus.on('hotkey:toggle-atlas', () => toggleWindow())
 
-  log.info('Atlas ready')
+  log.info('Ultron ready')
 })
 
 app.on('window-all-closed', () => {
@@ -135,5 +174,4 @@ app.on('before-quit', async () => {
   log.info('Shutting down services...')
   await services.disposeAll()
 })
-
 

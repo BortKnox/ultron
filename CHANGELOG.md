@@ -1,3 +1,38 @@
+# Changelog — Ultron fork (unreleased)
+
+Fork of [Atlas](https://github.com/dortanes/atlas) v0.2.3. Full rationale and audit in
+[`docs/ULTRON.md`](docs/ULTRON.md); Gemini voice details in [`docs/GEMINI-TTS.md`](docs/GEMINI-TTS.md).
+
+## [Added]
+- **Widget controls** — microphone, spoken-responses and settings buttons under the orb (`components/controls/WidgetControls`)
+- **Persistent listening indicator** — visible badge while the microphone captures, even when the widget is collapsed (`components/controls/ListeningIndicator`)
+- **Explicit microphone lifecycle** — `useSTT` gained `enable()` / `disable()` / `micActive` / `micError`; capture is never restored on launch unless opted in
+- **`stt.autoListen`** — explicit opt-in for starting the microphone on launch; existing installs with STT enabled are migrated to `true`
+- **Google Gemini TTS provider** — `gemini-3.8-flash-tts` / `gemini-3.8-flash-lite-tts` via the Interactions API, 30 studio voices (`services/tts/GeminiTTSProvider.ts`, `geminiCatalog.ts`)
+- **WAV support** — `utils/wav.ts` builds/parses RIFF headers; `useTTS` gained a `wav` blob pipeline
+- **Per-provider TTS credentials** — `tts.providers.{elevenlabs,gemini}` so switching providers no longer overwrites keys
+- **`audio.getTTSOptions`** — verified model/voice catalogue for the settings UI
+- **`audio.testTTSVoice`** — synthesize a sample with the on-screen settings
+- **`system.openSettings`** — open Settings from the widget
+- **`ui.accent`** — `ultron` (fixed crimson) or `system` (OS accent)
+- **Original icon artwork** — `scripts/generate-icons.py` (graphite plate, segmented crimson ring, hexagon core)
+- **Verification pipeline** — `npm run typecheck` (renderer + main), `npm test` (vitest, 45 tests), `tsconfig.electron.json`
+
+## [Changed]
+- **Branding** — package name/description/repository, `productName`/`appId`/`executableName`/`artifactName`, window title, tray labels, prompts, README, About page (with Atlas attribution)
+- **User-data path is preserved** — a previous Atlas/Ultron user-data directory is reused instead of starting from an empty one
+- **Default persona** — displayed as **Ultron**; id stays `atlas-default` for compatibility, customised fields are never overwritten
+- **Config merging** — recursive deep merge so nested groups (`tts.providers.*`) survive partial saves
+- **TTS errors** — provider-aware messages (`ttsErrors.ts`) naming the failing provider and the fix
+- **Audio format reporting** — `BaseTTSProvider.audioFormat` replaces the hard-coded `'mpeg' | 'opus'` union
+- **Voice tab** — rebuilt around providers, with key masking, verified pickers, custom ids and an inline test result
+- **CI artifact** — `ultron-windows-x64`
+
+## [Preserved]
+- Agent engine, computer-use loop, planning, personas, memory, facts, search, prompts, settings layout
+- ElevenLabs quota auto-disable behaviour
+- Apache-2.0 licence and upstream copyright
+
 # Changelog — v0.2.3 (2026-03-16)
 
 ## [Added]

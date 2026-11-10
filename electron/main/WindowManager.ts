@@ -39,7 +39,7 @@ export async function createWindow(): Promise<BrowserWindow> {
   const { x, y, width, height } = getActiveDisplayBounds()
 
   win = new BrowserWindow({
-    title: 'Atlas',
+    title: 'Ultron',
     icon: `${process.env.VITE_PUBLIC}/favicon.ico`,
     width,
     height,
@@ -180,10 +180,10 @@ export function forceHideWindow(): void {
 // ── Action Focus Management ──
 
 /**
- * Blur the Atlas window before executing a motor action.
+ * Blur the Ultron window before executing a motor action.
  *
  * This ensures that hotkeys (Win+E, Alt+F4) and clicks target
- * the real foreground application, not the Atlas overlay.
+ * the real foreground application, not the Ultron overlay.
  */
 export function blurForAction(): void {
   if (!win) return
@@ -194,7 +194,7 @@ export function blurForAction(): void {
 }
 
 /**
- * Restore the Atlas window state after a motor action completes.
+ * Restore the Ultron window state after a motor action completes.
  */
 export function restoreAfterAction(): void {
   if (!win) return
@@ -218,7 +218,7 @@ export function clearWindow(): void {
 
 
 
-/** Get the Electron Display that the Atlas window currently occupies. */
+/** Get the Electron Display that the Ultron window currently occupies. */
 export function getWindowDisplay() {
   if (win) {
     return screen.getDisplayMatching(win.getBounds())
@@ -229,7 +229,7 @@ export function getWindowDisplay() {
 // ── Multi-Monitor Display Targeting ──
 
 /**
- * Move the Atlas overlay to a specific display (0-indexed).
+ * Move the Ultron overlay to a specific display (0-indexed).
  * Used to show the rainbow border on the monitor the agent is looking at.
  */
 export function moveToDisplay(displayIndex: number): void {
@@ -246,7 +246,7 @@ export function moveToDisplay(displayIndex: number): void {
 }
 
 /**
- * Move the Atlas overlay back to the display where the cursor is.
+ * Move the Ultron overlay back to the display where the cursor is.
  */
 export function moveToActiveDisplay(): void {
   if (!win) return

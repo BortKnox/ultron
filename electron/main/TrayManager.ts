@@ -10,7 +10,7 @@ import type { PersonaService } from './services/persona/PersonaService'
  * TrayManager — system tray icon and context menu.
  *
  * Provides:
- * - Show/Hide Atlas (left-click or menu)
+ * - Show/Hide Ultron (left-click or menu)
  * - Personas submenu (switch active persona)
  * - Settings (opens settings overlay)
  * - Toggle AlwaysOnTop
@@ -35,7 +35,7 @@ export function createTray(personaService?: PersonaService): void {
   personaServiceRef = personaService ?? null
   const icon = nativeImage.createFromPath(getTrayIconPath()).resize({ width: 16, height: 16 })
   tray = new Tray(icon)
-  tray.setToolTip('Atlas')
+  tray.setToolTip('Ultron')
 
   buildContextMenu()
 
@@ -72,7 +72,7 @@ function buildContextMenu(): void {
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Show/Hide Atlas',
+      label: 'Show/Hide Ultron',
       click: () => toggleWindow(),
     },
     { type: 'separator' },
@@ -105,7 +105,7 @@ function buildContextMenu(): void {
     },
     { type: 'separator' },
     {
-      label: 'Quit Atlas',
+      label: 'Quit Ultron',
       click: () => {
         app.quit()
       },

@@ -15,7 +15,7 @@ const STATE_SPEED: Record<AgentState, number> = {
 const SPEED_LERP_DURATION = 1200
 
 /**
- * AgentOrb — the central visual avatar of Atlas.
+ * AgentOrb — the central visual avatar of Ultron.
  *
  * An animated SVG blob cluster that reflects the agent's current state
  * through color palettes and animation speed. Blobs continuously morph

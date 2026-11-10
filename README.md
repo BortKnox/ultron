@@ -1,52 +1,39 @@
 <p align="center">
-  <img src="build/icon.png" width="128" height="128" alt="Atlas" />
+  <img src="build/icon.png" width="128" height="128" alt="Ultron" />
 </p>
 
-<h1 align="center">Atlas</h1>
+<h1 align="center">Ultron</h1>
 
 <p align="center">
-  <b>AI agent that lives on your desktop.</b><br/>
+  <b>A composed AI agent that lives on your desktop.</b><br/>
   It sees your screen, understands what you need, and gets things done — hands-free.
 </p>
 
 <p align="center">
-  <a href="https://github.com/dortanes/atlas/releases"><img src="https://img.shields.io/badge/download-v0.2.3-7c3aed?style=for-the-badge&logo=windows&logoColor=white" alt="Download" /></a>&nbsp;
-  <a href="#-getting-started"><img src="https://img.shields.io/badge/get%20started-→-0ea5e9?style=for-the-badge" alt="Get Started" /></a>&nbsp;
+  <a href="#-getting-started"><img src="https://img.shields.io/badge/get%20started-→-be2631?style=for-the-badge" alt="Get Started" /></a>&nbsp;
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-gray?style=for-the-badge" alt="License" /></a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-supported-brightgreen?style=flat-square&logo=windows&logoColor=white" alt="Windows" />
-  <img src="https://img.shields.io/badge/status-archived-lightgrey?style=flat-square" alt="Archived" />
   <img src="https://img.shields.io/badge/privacy--first-local%20only-blue?style=flat-square" alt="Privacy" />
+  <img src="https://img.shields.io/badge/built%20on-Atlas-lightgrey?style=flat-square" alt="Built on Atlas" />
 </p>
 
-<p align="center"><img src="docs/preview.png" width="300" alt="Atlas Demo" /></p>
+---
+
+> **Ultron is a fork of [Atlas](https://github.com/dortanes/atlas) by dortanes** (Apache-2.0).
+> The desktop-agent engine — computer use, planning, personas, memory, search —
+> comes from Atlas. This fork changes the identity, the widget interaction model
+> and the text-to-speech stack. See [docs/ULTRON.md](docs/ULTRON.md) for the full
+> change log and audit, and [docs/GEMINI-TTS.md](docs/GEMINI-TTS.md) for the
+> Gemini voice integration.
 
 ---
 
-> **📦 This project is archived (final version: v0.2.3).**
->
-> Development has stopped, and the repository is now read-only. I made this decision for two reasons:
->
-> - **No Windows device for testing.** Atlas only runs on Windows, and I no longer have a Windows machine to develop and test on.
-> - **The idea is now built into the big assistants.** The major AI assistants ship native computer use in their own apps, so a standalone agent no longer has a reason to exist.
->
-> The code stays available under the Apache 2.0 license. Fork it if you want to take it further.
->
-> **Looking for something else to try?** Have a look at my current projects on [GitHub](https://github.com/dortanes). Something there might interest you.
->
-> What Atlas supports in its final state:
->
-> - 🤖 **LLM support:** Gemini (including native [Computer Use API](https://ai.google.dev/gemini-api/docs/computer-use)) and OpenAI.
-> - 🖥 **Screen control:** Gemini 3.x models use native [Computer Use API](https://ai.google.dev/gemini-api/docs/computer-use) for precise actions. Older models use vision-based coordinate prediction.
-> - 💻 **Platform:** Windows only.
+## What is Ultron?
 
----
-
-## What is Atlas?
-
-Atlas is an **AI-powered desktop agent** that works alongside you as a transparent overlay. Press `Ctrl+Space`, tell it what to do — and it figures out the rest: navigating apps, clicking buttons, typing text, searching the web, finding files, running commands.
+Ultron is an **AI-powered desktop agent** that works alongside you as a transparent overlay. Press `Ctrl+Space`, tell it what to do — and it figures out the rest: navigating apps, clicking buttons, typing text, searching the web, finding files, running commands.
 
 Think of it as a **copilot for your entire OS**.
 
@@ -56,8 +43,8 @@ Think of it as a **copilot for your entire OS**.
 - 🎯 **Shows what it's doing** — you can see the agent's cursor moving on screen
 - 🔍 **Searches the web** — finds answers and brings them back, no tab-switching needed
 - 📂 **Finds your files** — searches local files and folders by name, right from chat
-- 🗣 **Speaks to you** — real-time voice responses with streaming TTS
-- 🎙 **Listens to you** — local speech-to-text with wake word activation, no cloud required
+- 🗣 **Speaks to you** — ElevenLabs (streaming), Yandex Alice, or Google Gemini TTS
+- 🎙 **Listens to you** — local speech-to-text with an explicit microphone switch and wake word
 - 🔊 **Sound feedback** — distinct sounds for every state: activation, processing, task complete, warnings
 - 🛡 **Asks before doing anything risky** — built-in safety system with permission prompts
 
@@ -65,13 +52,35 @@ Think of it as a **copilot for your entire OS**.
 
 ## ✨ Key Features
 
+### 🎛 Widget Controls
+Three switches sit directly under the orb, so nothing important is hidden in Settings:
+
+| Control | What it does |
+| --- | --- |
+| 🎙 **Microphone** | Starts and stops real microphone capture. Its state mirrors the audio pipeline, so the button can never claim to be listening while capture is off. |
+| 🔊 **Speaker** | Mutes or unmutes spoken responses. Text, listening and commands keep working while muted. |
+| ⚙ **Settings** | Opens Settings without leaving the widget. |
+
+A small **Listening** badge stays visible even when the widget is collapsed, so
+you always know whether the microphone is on. Capture is never persisted: it
+starts on launch only if you enable *Start microphone on launch* in
+Settings → Voice.
+
+### 🗣 Text-to-Speech
+- **Google Gemini** — `gemini-3.8-flash-tts` / `gemini-3.8-flash-lite-tts`, 30 studio voices, free tier available, verified model/voice pickers and a **Test voice** button
+- **ElevenLabs** — streaming MP3 with your own voice ids
+- **Yandex Alice** — no API key required
+
+Each provider keeps its own credentials, so switching providers never
+overwrites another one. A failing provider is reported, never silently swapped.
+
 ### 🔮 The Orb
-A glowing AI indicator that shows you exactly what Atlas is doing — idle, thinking, acting, or waiting for your input. Always visible, never in the way.
+A glowing AI indicator that shows you exactly what Ultron is doing — idle, thinking, acting, or waiting for your input. Always visible, never in the way.
 
 ### 🏝 Islands
 Context-aware floating panels that appear when relevant:
 - **Action Island** — shows the current task and progress
-- **Response Island** — streams Atlas's thoughts and replies word by word
+- **Response Island** — streams Ultron's thoughts and replies word by word
 - **Permission Island** — asks for confirmation before risky operations
 - **Microtask Island** — your task queue with real-time step progress (queue new tasks while the agent is busy)
 - **Search Island** — web search results and local file search results
@@ -79,28 +88,28 @@ Context-aware floating panels that appear when relevant:
 - **Warning Island** — dismissable warnings for errors and quota issues
 
 ### 🎯 Agent Cursor
-When Atlas controls your desktop, you can see its cursor moving on screen — clicking, typing, and scrolling — so you always know what's happening.
+When Ultron controls your desktop, you can see its cursor moving on screen — clicking, typing, and scrolling — so you always know what's happening.
 
 ### 🖥 Computer Use
-With compatible Gemini 3.x models, Atlas uses the native **[Computer Use API](https://ai.google.dev/gemini-api/docs/computer-use)** for precise screen control — clicking, typing, scrolling, navigating, and searching — all without opening extra apps. Multi-monitor setups are supported.
+With compatible Gemini 3.x models, Ultron uses the native **[Computer Use API](https://ai.google.dev/gemini-api/docs/computer-use)** for precise screen control — clicking, typing, scrolling, navigating, and searching — all without opening extra apps. Multi-monitor setups are supported.
 
 ### 🧩 Smart Task Planning
-Before executing complex commands, Atlas breaks them into high-level steps (2–5) and displays them in the Task Queue. You see planned steps before execution begins and watch progress as each step completes.
+Before executing complex commands, Ultron breaks them into high-level steps (2–5) and displays them in the Task Queue. You see planned steps before execution begins and watch progress as each step completes.
 
 ### 🎭 Personas
 Create multiple AI agents with unique personalities, knowledge, and voices. Each persona has its own memory and prompt settings — switch between them from the tray menu.
 
 ### 🧠 Memory
-Atlas remembers your preferences and context across sessions. It learns facts about you from conversations and uses them to give better responses over time. Browse conversation history and view, edit, or delete learned facts in Settings.
+Ultron remembers your preferences and context across sessions. It learns facts about you from conversations and uses them to give better responses over time. Browse conversation history and view, edit, or delete learned facts in Settings.
 
 ### 🎙 Voice Input
-Local offline speech-to-text via Vosk — just say the wake word (the active persona's name) and Atlas starts listening. No cloud API required.
+Local offline speech-to-text via Vosk — enable the microphone in the widget and say the wake word (the active persona's name). No cloud API required.
 
 ### ✍️ Editable Prompts
 Full control over the AI's behavior — modify system, action, and safety prompts directly from the Settings UI. Reset to defaults anytime.
 
 ### ⚙️ Customizable Layout
-Choose where Atlas appears on screen (left, right, or center) and configure your preferred activation hotkey — all from Settings.
+Choose where Ultron appears on screen (left, right, or center), pick an accent (Ultron crimson or your OS accent) and configure your preferred activation hotkey — all from Settings.
 
 ### 🔧 Debug Logging
 Enable per-request session logs to trace the full pipeline: intent classification → LLM calls → actions → response streaming — with precise timing for every stage.
@@ -111,10 +120,10 @@ Enable per-request session logs to trace the full pipeline: intent classificatio
 
 ### Download & Install
 
-1. Go to [**Releases**](https://github.com/dortanes/atlas/releases) and download the latest installer for Windows
-2. Run the installer — Atlas will appear in your system tray
+1. Go to [**Releases**](https://github.com/BortKnox/ultron/releases) and download the latest installer for Windows
+2. Run the installer — Ultron will appear in your system tray
 3. Get a **Gemini API key**: go to [Google AI Studio](https://aistudio.google.com/apikey) → sign in → **Create API Key** → copy it
-4. Click the **Atlas tray icon** → **Settings** → **Intelligence** tab → paste your API key
+4. Click the **Ultron tray icon** → **Settings** → **Intelligence** tab → paste your API key
 5. Set the recommended models in the **Intelligence** tab:
 
    | Setting | Free tier | Paid tier |
@@ -124,23 +133,36 @@ Enable per-request session logs to trace the full pipeline: intent classificatio
 
    > Vision model handles screen control & Computer Use. Paid tier model is more accurate but requires a billing-enabled API key.
 
-6. *(Optional)* For voice output:
-   - **Alice** (free, no API key): **Voice** tab → select **Alice** → done!
-   - **ElevenLabs** (premium voices): get an [ElevenLabs](https://elevenlabs.io/) API key → **Voice** tab → paste key + voice ID
-7. Press `Ctrl+Space` and start giving Atlas tasks 🎉
+6. *(Optional)* For voice output — **Voice** tab:
+   - **Gemini** — paste a Gemini API key, keep `gemini-3.8-flash-lite-tts` and a voice such as `Kore`, then press **Test voice**
+   - **Alice** (free, no API key): select **Yandex Alice** → done
+   - **ElevenLabs** (premium voices): get an [ElevenLabs](https://elevenlabs.io/) API key → paste key + voice ID
+7. Press `Ctrl+Space` and start giving Ultron tasks 🎉
+
+> Coming from Atlas? Your config, personas, memory, facts and downloaded
+> speech models are reused from the previous user-data directory.
 
 ### Build from Source
 
-> For contributors and developers who want to run Atlas from source.
+> For contributors and developers who want to run Ultron from source.
 
 ```bash
-git clone https://github.com/dortanes/atlas.git
-cd atlas
-yarn install
-yarn dev
+git clone https://github.com/BortKnox/ultron.git
+cd ultron
+npm install
+npm run dev
 ```
 
-> **Requires:** [Node.js](https://nodejs.org/) ≥ 20 · [Yarn](https://yarnpkg.com/) ≥ 1.22
+> **Requires:** [Node.js](https://nodejs.org/) ≥ 20
+
+Useful scripts:
+
+```bash
+npm run lint        # ESLint
+npm run typecheck   # renderer + main process
+npm test            # vitest unit tests
+npm run build       # lint + typecheck + vite build + electron-builder
+```
 
 ---
 
@@ -149,12 +171,13 @@ yarn dev
 | Status | Feature |
 |:------:|---------|
 | ✅ | Transparent glassmorphism overlay with Orb + Island UI |
+| ✅ | Widget mic / speaker / settings controls |
 | ✅ | LLM integration (Gemini + OpenAI) with multi-provider architecture |
 | ✅ | Screen vision + desktop automation (robotjs) |
 | ✅ | Native Gemini [Computer Use API](https://ai.google.dev/gemini-api/docs/computer-use) |
 | ✅ | Smart task planning with step-by-step progress |
 | ✅ | Agent cursor animations (click, type, scroll overlays) |
-| ✅ | Streaming TTS (ElevenLabs + Alice) |
+| ✅ | Google Gemini TTS (WAV), ElevenLabs streaming, Yandex Alice |
 | ✅ | Persona system with isolated memory & custom voices |
 | ✅ | Web search + local file search |
 | ✅ | Settings UI with prompt editor + debug logging |
@@ -164,25 +187,27 @@ yarn dev
 | ⏹ | Action whitelist/blacklist & audit log |
 | ⏹ | Onboarding flow |
 | ⏹ | Auto-update |
-
-> ⏹ Not implemented. Development has stopped.
+| ⏹ | Streaming Gemini TTS (needs the SDK's SSE variant) |
 
 ---
 
-## 🔭 My Other Projects
-
-See what I'm working on now: [github.com/dortanes](https://github.com/dortanes).
-
 ## 🤝 Contributing
 
-The repository is archived and no longer accepts issues or pull requests. Fork it to continue the work.
+Issues and pull requests are welcome. For anything touching the agent engine,
+read [docs/ULTRON.md](docs/ULTRON.md) first — it lists what was deliberately
+left unchanged and which dependency upgrades are still pending.
 
 ## 📜 License
 
 [Apache License 2.0](LICENSE) — use it, modify it, build on it.
 
+This project is a fork of [Atlas](https://github.com/dortanes/atlas) by
+[dortanes](https://github.com/dortanes), also Apache-2.0. The original
+copyright and licence notices are retained.
+
 ---
 
 <p align="center">
-  Vibecoded with ❤️ by <a href="https://github.com/dortanes">dortanes</a>
+  Forked and reworked by <a href="https://github.com/BortKnox">BortKnox</a><br/>
+  Original engine: <a href="https://github.com/dortanes">dortanes</a>
 </p>

@@ -2,10 +2,10 @@
 {
   $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   icon: "build/icon.ico",
-  artifactName: "atlas-${version}.${ext}",
-  appId: "com.dortanes.atlas",
-  executableName: "atlas",
-  productName: "Atlas",
+  artifactName: "ultron-${version}.${ext}",
+  appId: "com.bortknox.ultron",
+  executableName: "ultron",
+  productName: "Ultron",
   asar: true,
   extraResources: [
     {
@@ -41,7 +41,7 @@
   nsis: {
     oneClick: true,
     perMachine: false,
-    shortcutName: "Atlas",
+    shortcutName: "Ultron",
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
     deleteAppDataOnUninstall: true,

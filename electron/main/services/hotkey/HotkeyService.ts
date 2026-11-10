@@ -40,7 +40,7 @@ export class HotkeyService extends BaseService {
       }
       mainEventBus.on('config:changed', this.configHandler)
 
-      this.log.info(`HotkeyService started (${getConfig().hotkey} → toggle Atlas)`)
+      this.log.info(`HotkeyService started (${getConfig().hotkey} → toggle Ultron)`)
     } catch (err) {
       this.log.error('Failed to initialize uiohook-napi:', err)
     }
@@ -118,7 +118,7 @@ export class HotkeyService extends BaseService {
         this.modifiers.meta === this.hotkey.meta &&
         e.keycode === this.hotkey.keycode
       ) {
-        this.log.debug(`Global hotkey: ${getConfig().hotkey} → toggle Atlas`)
+        this.log.debug(`Global hotkey: ${getConfig().hotkey} → toggle Ultron`)
         mainEventBus.emit('hotkey:toggle-atlas')
       }
     }
