@@ -48,6 +48,7 @@ let recognizer: any = null
 let audioContext: AudioContext | null = null
 let mediaStream: MediaStream | null = null
 let sourceNode: MediaStreamAudioSourceNode | null = null
+let workletNode: AudioWorkletNode | null = null
 let silenceTimer: ReturnType<typeof setTimeout> | null = null
 let ttsSpeaking = false
 let lastSubmitTime = 0
@@ -145,6 +146,10 @@ async function startMic(): Promise<void> {
   if (!model) await loadModel()
   if (!model) return
 
+  // Defensive cleanup makes every start independent, including recovery from
+  // a failed/partially initialized previous capture.
+  releaseCaptureResources()
+
   const sampleRate = 16000
 
   recognizer = new model.KaldiRecognizer(sampleRate)
@@ -165,7 +170,7 @@ async function startMic(): Promise<void> {
 
   // Use AudioWorklet if available (off-main-thread), fallback to ScriptProcessor
   await audioContext.audioWorklet.addModule(createWorkletBlob())
-  const workletNode = new AudioWorkletNode(audioContext, 'stt-processor')
+  workletNode = new AudioWorkletNode(audioContext, 'stt-processor')
   workletNode.port.onmessage = (e) => {
     if (!recognizer) return
     // During TTS: only process audio for wake word detection (idle phase)
@@ -185,13 +190,22 @@ async function startMic(): Promise<void> {
   console.info('[useSTT] Mic started, listening for wake word...')
 }
 
-function stopMic(): void {
+/** Release every renderer-owned capture resource before a future start. */
+function releaseCaptureResources(): void {
   clearSilenceTimer()
+
+  workletNode?.port.close()
+  workletNode?.disconnect()
+  workletNode = null
 
   sourceNode?.disconnect()
   sourceNode = null
-  audioContext?.close()
+
+  const context = audioContext
   audioContext = null
+  // close() is asynchronous, but must be requested before the next start so
+  // the browser releases the old graph and microphone device promptly.
+  void context?.close().catch(() => {})
 
   // Releasing the tracks is what actually turns the microphone off
   mediaStream?.getTracks().forEach((t) => t.stop())
@@ -199,6 +213,10 @@ function stopMic(): void {
 
   recognizer?.remove()
   recognizer = null
+}
+
+function stopMic(): void {
+  releaseCaptureResources()
 
   phase.value = 'off'
   transcript.value = ''
@@ -340,14 +358,30 @@ function submitTranscript(): void {
   lastSubmitText = fullText
 
   console.info('[useSTT] Auto-submit:', fullText)
+  // Vosk/browser audio graphs can remain in a completed state after a final
+  // result. Tear down the old capture before the agent starts processing, then
+  // let auto-listen create a completely fresh stream/recognizer below.
+  resetCaptureAfterSubmit()
+
   const { sendCommand } = useAgent()
   sendCommand(fullText)
+}
 
-  // Reset to idle (keep listening for next wake word)
-  phase.value = 'idle'
-  transcript.value = ''
-  chunks.value = []
-  api.audio.stopListening.mutate()
+/** Stop the completed recognizer and optionally reacquire capture. */
+async function resetCaptureAfterSubmit(): Promise<void> {
+  const shouldResumeWakeWord = autoListen.value
+  stopMic()
+
+  if (!shouldResumeWakeWord) return
+
+  try {
+    await startMic()
+    console.info('[useSTT] Reinitialized microphone after transcription')
+  } catch (err) {
+    console.error('[useSTT] Failed to reinitialize microphone:', err)
+    micError.value = describeMicError(err)
+    stopMic()
+  }
 }
 
 // ── Error descriptions ──

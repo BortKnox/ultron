@@ -5,7 +5,8 @@ import './InputBar.css'
 /**
  * InputBar — text command input (fallback when user can't speak).
  *
- * - Type + Enter to submit
+ * - Type + Enter or click Send to submit
+ * - Clicking Send also cancels an active/stuck microphone capture
  * - Emits 'submit' on Enter, 'close' on Escape or submit
  */
 export default defineComponent({
@@ -18,7 +19,7 @@ export default defineComponent({
     },
   },
 
-  emits: ['submit', 'close'],
+  emits: ['submit', 'close', 'cancelMic'],
 
   setup(props, { emit }) {
     const inputText = ref('')
@@ -39,6 +40,11 @@ export default defineComponent({
       }
     }
 
+    function onSendClick() {
+      emit('cancelMic')
+      onSubmit()
+    }
+
     function focusInput() {
       nextTick(() => {
         const el = inputRef.value as any
@@ -52,7 +58,7 @@ export default defineComponent({
 
     onMounted(focusInput)
 
-    return { inputText, inputRef, onSubmit, onKeydown, focusInput }
+    return { inputText, inputRef, onSubmit, onKeydown, onSendClick, focusInput }
   },
 
   render() {
@@ -72,7 +78,8 @@ export default defineComponent({
           />
           <button
             class="input-bar__submit-btn"
-            onClick={this.onSubmit}
+            onClick={this.onSendClick}
+            aria-label="Send command and stop listening"
             title="Send command"
           >
             <span class="island__icon">arrow_upward</span>

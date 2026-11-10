@@ -369,6 +369,7 @@ export default defineComponent({
       voiceEnabled,
       speechEnabled,
       toggleMic,
+      disableSTT,
       toggleSpeech,
       openSettings,
     }
@@ -509,6 +510,7 @@ export default defineComponent({
               <InputBar
                 visible={!this.inputDismissing}
                 onClose={this.closeInput}
+                onCancelMic={this.disableSTT}
                 onSubmit={(text: string) => {
                   this.sendCommand(text)
                 }}
