@@ -65,6 +65,7 @@ let captureGeneration = 0
 
 const SILENCE_BASE = 700
 const SILENCE_MAX = 1500
+const VOSK_SAMPLE_RATE = 16000
 
 // ── TTS coordination ──
 
@@ -153,7 +154,6 @@ async function loadModel(): Promise<void> {
 
 async function startMic(): Promise<void> {
   const generation = ++captureGeneration
-  const requestedSampleRate = 16000
   if (!model) await loadModel()
   if (!model) return
 
@@ -165,7 +165,6 @@ async function startMic(): Promise<void> {
 
   mediaStream = await navigator.mediaDevices.getUserMedia({
     audio: {
-      sampleRate: { ideal: requestedSampleRate },
       channelCount: 1,
       echoCancellation: true,
       noiseSuppression: true,
@@ -184,11 +183,19 @@ async function startMic(): Promise<void> {
     })
   }
 
-  audioContext = new AudioContext({ sampleRate: requestedSampleRate })
-  const context = audioContext
-  if (context.state === 'suspended') await context.resume()
-  if (context.state !== 'running') {
-    throw new Error(`AudioContext did not reach running state (state: ${context.state})`)
+  let context: AudioContext
+  try {
+    // Let Chromium/Electron select the native device rate. Forcing 16 kHz at
+    // AudioContext construction is unreliable on Windows input devices.
+    audioContext = new AudioContext()
+    context = audioContext
+    if (context.state === 'suspended') await context.resume()
+    if (context.state !== 'running') {
+      throw new Error(`AudioContext did not reach running state (state: ${context.state})`)
+    }
+  } catch (err) {
+    console.error('[STT] Stream Failed: AudioContext creation/resume', err)
+    throw err
   }
   context.addEventListener('statechange', () => {
     if (audioContext !== context || generation !== captureGeneration) return
@@ -197,48 +204,59 @@ async function startMic(): Promise<void> {
       void stopMic()
     }
   })
-  recognizer = new model.KaldiRecognizer(context.sampleRate)
+  recognizer = new model.KaldiRecognizer(VOSK_SAMPLE_RATE)
   recognizer.on('result', onResult)
   recognizer.on('partialresult', onPartialResult)
 
-  sourceNode = context.createMediaStreamSource(stream)
-  // This is the capture path documented by vosk-browser itself. Passing the
-  // original AudioBuffer preserves its real sample rate and avoids a custom
-  // AudioWorklet bridge that can appear live while delivering no frames.
-  processorNode = context.createScriptProcessor(4096, 1, 1)
-  processorNode.onaudioprocess = (event: AudioProcessingEvent) => {
-    if (!recognizer) return
-    lastAudioFrameAt = Date.now()
-    // During TTS: only process audio for wake word detection (idle phase)
-    // Skip feeding audio when actively listening to avoid TTS echo
-    if (ttsSpeaking && phase.value !== 'idle') return
+  try {
+    sourceNode = context.createMediaStreamSource(stream)
+    // This is the capture path documented by vosk-browser itself. A zero-gain
+    // sink keeps ScriptProcessor alive without microphone feedback.
+    processorNode = context.createScriptProcessor(4096, 1, 1)
+    processorNode.onaudioprocess = (event: AudioProcessingEvent) => {
+      if (!recognizer) return
+      lastAudioFrameAt = Date.now()
+      // During TTS: only process audio for wake word detection (idle phase)
+      if (ttsSpeaking && phase.value !== 'idle') return
 
-    try {
-      recognizer.acceptWaveform(event.inputBuffer)
-    } catch (err) {
-      console.error('[STT] Stream Failed: Vosk acceptWaveform', err)
-      void stopMic()
+      try {
+        const samples = resampleToVosk(event.inputBuffer)
+        const buffer = context.createBuffer(1, samples.length, VOSK_SAMPLE_RATE)
+        buffer.getChannelData(0).set(samples)
+        recognizer.acceptWaveform(buffer)
+      } catch (err) {
+        console.error('[STT] Stream Failed: ScriptProcessor/Vosk processing', err)
+        void stopMic()
+      }
     }
+    sourceNode.connect(processorNode)
+    sinkNode = context.createGain()
+    sinkNode.gain.value = 0
+    processorNode.connect(sinkNode)
+    sinkNode.connect(context.destination)
+  } catch (err) {
+    console.error('[STT] Stream Failed: ScriptProcessor graph creation', err)
+    throw err
   }
-  sourceNode.connect(processorNode)
-  // A ScriptProcessor must be connected to an output to keep processing, but
-  // a zero-gain sink prevents the microphone from being played back aloud.
-  sinkNode = context.createGain()
-  sinkNode.gain.value = 0
-  processorNode.connect(sinkNode)
-  sinkNode.connect(context.destination)
 
   hardwareActive.value = true
   lastAudioFrameAt = Date.now()
   captureWatchdog = setInterval(() => {
     if (mediaStream !== stream || generation !== captureGeneration) return
     if (context.state !== 'running') return
-    if (Date.now() - lastAudioFrameAt > 2500) {
+    // Give Chromium/Electron several seconds to warm up a newly created graph
+    // before declaring the device dead.
+    if (Date.now() - lastAudioFrameAt > 5000) {
       console.error('[STT] Stream Failed: no audio frames received')
       void stopMic()
     }
   }, 1000)
   phase.value = 'idle'
+  // The backend state represents the live hardware session, including its
+  // wake-word waiting phase—not only a recognized command.
+  api.audio.startListening.mutate().catch((err) => {
+    console.error('[STT] Failed to publish listening state:', err)
+  })
   initVisibilityWatch()
   console.info('[STT] Capture Live — listening for wake word')
 }
@@ -411,6 +429,26 @@ function clearSilenceTimer(): void {
     clearTimeout(silenceTimer)
     silenceTimer = null
   }
+}
+
+/** Convert a native-rate AudioBuffer into the 16 kHz buffer Vosk expects. */
+function resampleToVosk(input: AudioBuffer): Float32Array {
+  const source = input.getChannelData(0)
+  if (input.sampleRate === VOSK_SAMPLE_RATE) return source.slice()
+
+  const ratio = input.sampleRate / VOSK_SAMPLE_RATE
+  const outputLength = Math.max(1, Math.round(source.length / ratio))
+  const output = new Float32Array(outputLength)
+
+  for (let i = 0; i < outputLength; i += 1) {
+    const position = i * ratio
+    const left = Math.floor(position)
+    const right = Math.min(left + 1, source.length - 1)
+    const fraction = position - left
+    output[i] = source[left] + (source[right] - source[left]) * fraction
+  }
+
+  return output
 }
 
 async function submitTranscript(): Promise<void> {
