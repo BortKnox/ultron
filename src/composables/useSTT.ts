@@ -50,7 +50,10 @@ let recognizer: any = null
 let audioContext: AudioContext | null = null
 let mediaStream: MediaStream | null = null
 let sourceNode: MediaStreamAudioSourceNode | null = null
-let workletNode: AudioWorkletNode | null = null
+let processorNode: ScriptProcessorNode | null = null
+let sinkNode: GainNode | null = null
+let captureWatchdog: ReturnType<typeof setInterval> | null = null
+let lastAudioFrameAt = 0
 let silenceTimer: ReturnType<typeof setTimeout> | null = null
 let ttsSpeaking = false
 let lastSubmitTime = 0
@@ -150,6 +153,7 @@ async function loadModel(): Promise<void> {
 
 async function startMic(): Promise<void> {
   const generation = ++captureGeneration
+  const requestedSampleRate = 16000
   if (!model) await loadModel()
   if (!model) return
 
@@ -159,15 +163,9 @@ async function startMic(): Promise<void> {
   await releaseCaptureResources()
   if (generation !== captureGeneration) return
 
-  const sampleRate = 16000
-
-  recognizer = new model.KaldiRecognizer(sampleRate)
-  recognizer.on('result', onResult)
-  recognizer.on('partialresult', onPartialResult)
-
   mediaStream = await navigator.mediaDevices.getUserMedia({
     audio: {
-      sampleRate: { ideal: sampleRate },
+      sampleRate: { ideal: requestedSampleRate },
       channelCount: 1,
       echoCancellation: true,
       noiseSuppression: true,
@@ -186,7 +184,7 @@ async function startMic(): Promise<void> {
     })
   }
 
-  audioContext = new AudioContext({ sampleRate })
+  audioContext = new AudioContext({ sampleRate: requestedSampleRate })
   const context = audioContext
   if (context.state === 'suspended') await context.resume()
   if (context.state !== 'running') {
@@ -199,27 +197,47 @@ async function startMic(): Promise<void> {
       void stopMic()
     }
   })
-  sourceNode = context.createMediaStreamSource(stream)
+  recognizer = new model.KaldiRecognizer(context.sampleRate)
+  recognizer.on('result', onResult)
+  recognizer.on('partialresult', onPartialResult)
 
-  // Use AudioWorklet if available (off-main-thread), fallback to ScriptProcessor
-  await context.audioWorklet.addModule(createWorkletBlob())
-  workletNode = new AudioWorkletNode(context, 'stt-processor')
-  workletNode.port.onmessage = (e) => {
+  sourceNode = context.createMediaStreamSource(stream)
+  // This is the capture path documented by vosk-browser itself. Passing the
+  // original AudioBuffer preserves its real sample rate and avoids a custom
+  // AudioWorklet bridge that can appear live while delivering no frames.
+  processorNode = context.createScriptProcessor(4096, 1, 1)
+  processorNode.onaudioprocess = (event: AudioProcessingEvent) => {
     if (!recognizer) return
+    lastAudioFrameAt = Date.now()
     // During TTS: only process audio for wake word detection (idle phase)
     // Skip feeding audio when actively listening to avoid TTS echo
     if (ttsSpeaking && phase.value !== 'idle') return
 
-    const samples = e.data as Float32Array
-    if (audioContext !== context || context.state === 'closed') return
-    const buf = context.createBuffer(1, samples.length, sampleRate)
-    buf.getChannelData(0).set(samples)
-    recognizer.acceptWaveform(buf)
+    try {
+      recognizer.acceptWaveform(event.inputBuffer)
+    } catch (err) {
+      console.error('[STT] Stream Failed: Vosk acceptWaveform', err)
+      void stopMic()
+    }
   }
-  sourceNode.connect(workletNode)
-  workletNode.connect(context.destination)
+  sourceNode.connect(processorNode)
+  // A ScriptProcessor must be connected to an output to keep processing, but
+  // a zero-gain sink prevents the microphone from being played back aloud.
+  sinkNode = context.createGain()
+  sinkNode.gain.value = 0
+  processorNode.connect(sinkNode)
+  sinkNode.connect(context.destination)
 
   hardwareActive.value = true
+  lastAudioFrameAt = Date.now()
+  captureWatchdog = setInterval(() => {
+    if (mediaStream !== stream || generation !== captureGeneration) return
+    if (context.state !== 'running') return
+    if (Date.now() - lastAudioFrameAt > 2500) {
+      console.error('[STT] Stream Failed: no audio frames received')
+      void stopMic()
+    }
+  }, 1000)
   phase.value = 'idle'
   initVisibilityWatch()
   console.info('[STT] Capture Live — listening for wake word')
@@ -229,23 +247,32 @@ async function startMic(): Promise<void> {
 function releaseCaptureResources(): Promise<void> {
   clearSilenceTimer()
 
-  const oldWorklet = workletNode
+  const oldProcessor = processorNode
+  const oldSink = sinkNode
   const oldSource = sourceNode
   const oldContext = audioContext
   const oldStream = mediaStream
   const oldRecognizer = recognizer
 
-  // Detach globals synchronously so stale worklet messages cannot feed a new
+  // Detach globals synchronously so stale processor callbacks cannot feed a new
   // recognizer while the old AudioContext is still closing.
-  workletNode = null
+  processorNode = null
+  sinkNode = null
+  if (captureWatchdog) {
+    clearInterval(captureWatchdog)
+    captureWatchdog = null
+  }
   sourceNode = null
   audioContext = null
   mediaStream = null
   recognizer = null
 
   const release = async (): Promise<void> => {
-    oldWorklet?.port.close()
-    oldWorklet?.disconnect()
+    if (oldProcessor) {
+      oldProcessor.onaudioprocess = null
+      oldProcessor.disconnect()
+    }
+    oldSink?.disconnect()
     oldSource?.disconnect()
 
     const tracks = oldStream?.getTracks() ?? []
@@ -279,24 +306,6 @@ async function stopMic(): Promise<void> {
   chunks.value = []
   api.audio.stopListening.mutate().catch(() => {})
   await releaseCaptureResources()
-}
-
-// ── AudioWorklet (inlined as blob) ──
-
-function createWorkletBlob(): string {
-  const code = `
-    class STTProcessor extends AudioWorkletProcessor {
-      process(inputs) {
-        const input = inputs[0]
-        if (input && input[0] && input[0].length > 0) {
-          this.port.postMessage(input[0])
-        }
-        return true
-      }
-    }
-    registerProcessor('stt-processor', STTProcessor)
-  `
-  return URL.createObjectURL(new Blob([code], { type: 'application/javascript' }))
 }
 
 // ── Wake word + transcript handling ──
@@ -481,7 +490,7 @@ function setAutoListen(enabled: boolean): void {
 
 export function useSTT() {
   const isActivated = computed(() => hardwareActive.value && (phase.value === 'activated' || phase.value === 'listening'))
-  /** True only while the stream, context and worklet are live. */
+  /** True only while the stream, context and processor are live. */
   const micActive = computed(() => hardwareActive.value)
 
   return {
