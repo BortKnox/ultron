@@ -53,6 +53,10 @@ let silenceTimer: ReturnType<typeof setTimeout> | null = null
 let ttsSpeaking = false
 let lastSubmitTime = 0
 let lastSubmitText = ''
+/** Prevent a new capture from racing an in-flight AudioContext.close(). */
+let releaseBarrier: Promise<void> = Promise.resolve()
+/** Invalidates a start that is still waiting for model/load or teardown. */
+let captureGeneration = 0
 
 const SILENCE_BASE = 700
 const SILENCE_MAX = 1500
@@ -143,12 +147,15 @@ async function loadModel(): Promise<void> {
 // ── Mic lifecycle ──
 
 async function startMic(): Promise<void> {
+  const generation = ++captureGeneration
   if (!model) await loadModel()
   if (!model) return
 
   // Defensive cleanup makes every start independent, including recovery from
-  // a failed/partially initialized previous capture.
-  releaseCaptureResources()
+  // a failed/partially initialized previous capture. Wait for the old context
+  // to finish closing before creating a new graph.
+  await releaseCaptureResources()
+  if (generation !== captureGeneration) return
 
   const sampleRate = 16000
 
@@ -164,6 +171,7 @@ async function startMic(): Promise<void> {
       noiseSuppression: true,
     },
   })
+  console.info(`[useSTT] MediaStream acquired (${mediaStream.id})`)
 
   audioContext = new AudioContext({ sampleRate })
   sourceNode = audioContext.createMediaStreamSource(mediaStream)
@@ -191,32 +199,54 @@ async function startMic(): Promise<void> {
 }
 
 /** Release every renderer-owned capture resource before a future start. */
-function releaseCaptureResources(): void {
+function releaseCaptureResources(): Promise<void> {
   clearSilenceTimer()
 
-  workletNode?.port.close()
-  workletNode?.disconnect()
+  const oldWorklet = workletNode
+  const oldSource = sourceNode
+  const oldContext = audioContext
+  const oldStream = mediaStream
+  const oldRecognizer = recognizer
+
+  // Detach globals synchronously so stale worklet messages cannot feed a new
+  // recognizer while the old AudioContext is still closing.
   workletNode = null
-
-  sourceNode?.disconnect()
   sourceNode = null
-
-  const context = audioContext
   audioContext = null
-  // close() is asynchronous, but must be requested before the next start so
-  // the browser releases the old graph and microphone device promptly.
-  void context?.close().catch(() => {})
-
-  // Releasing the tracks is what actually turns the microphone off
-  mediaStream?.getTracks().forEach((t) => t.stop())
   mediaStream = null
-
-  recognizer?.remove()
   recognizer = null
+
+  const release = async (): Promise<void> => {
+    oldWorklet?.port.close()
+    oldWorklet?.disconnect()
+    oldSource?.disconnect()
+
+    const tracks = oldStream?.getTracks() ?? []
+    tracks.forEach((track) => track.stop())
+    if (oldStream || oldContext || oldRecognizer) {
+      console.info(`[useSTT] MediaStream released (${tracks.length} track(s))`)
+    }
+
+    oldRecognizer?.remove()
+
+    // Await the actual close. A new AudioContext is not created until this
+    // promise resolves, preventing the browser from retaining a zombie graph.
+    if (oldContext) {
+      try {
+        await oldContext.close()
+      } catch {
+        // A failed start may have already closed the context.
+      }
+    }
+  }
+
+  releaseBarrier = releaseBarrier.then(release, release)
+  return releaseBarrier
 }
 
-function stopMic(): void {
-  releaseCaptureResources()
+async function stopMic(): Promise<void> {
+  captureGeneration += 1
+  await releaseCaptureResources()
 
   phase.value = 'off'
   transcript.value = ''
@@ -361,7 +391,7 @@ function submitTranscript(): void {
   // Vosk/browser audio graphs can remain in a completed state after a final
   // result. Tear down the old capture before the agent starts processing, then
   // let auto-listen create a completely fresh stream/recognizer below.
-  resetCaptureAfterSubmit()
+  void resetCaptureAfterSubmit()
 
   const { sendCommand } = useAgent()
   sendCommand(fullText)
@@ -370,7 +400,7 @@ function submitTranscript(): void {
 /** Stop the completed recognizer and optionally reacquire capture. */
 async function resetCaptureAfterSubmit(): Promise<void> {
   const shouldResumeWakeWord = autoListen.value
-  stopMic()
+  await stopMic()
 
   if (!shouldResumeWakeWord) return
 
@@ -380,7 +410,7 @@ async function resetCaptureAfterSubmit(): Promise<void> {
   } catch (err) {
     console.error('[useSTT] Failed to reinitialize microphone:', err)
     micError.value = describeMicError(err)
-    stopMic()
+    await stopMic()
   }
 }
 
@@ -416,13 +446,13 @@ async function enable(): Promise<void> {
     console.error('[useSTT] Failed to enable microphone:', err)
     micError.value = describeMicError(err)
     // Make sure a half-started capture cannot linger
-    stopMic()
+    await stopMic()
   }
 }
 
 function disable(): void {
   micError.value = ''
-  stopMic()
+  void stopMic()
 }
 
 /** Mirror the persisted auto-listen preference into the runtime watcher */
