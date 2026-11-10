@@ -3,7 +3,7 @@ import { useMemory, type SessionMeta, type ConversationSession } from '@/composa
 
 /**
  * MemorySubTab — browse and manage conversation sessions for a persona.
- * Material icons for roles, styled session cards.
+ * Material icons for roles, styled session cards, and manual narrative memory.
  */
 export default defineComponent({
   name: 'MemorySubTab',
@@ -13,12 +13,33 @@ export default defineComponent({
   },
 
   setup(props) {
-    const { sessions, loading, loadSessions, getSession, deleteSession, clearSessions, newSession } = useMemory()
+    const {
+      sessions,
+      loading,
+      loadSessions,
+      getSession,
+      deleteSession,
+      clearSessions,
+      newSession,
+      addMemoryEntry,
+    } = useMemory()
 
+    const newMemoryText = ref('')
+    const addingMemory = ref(false)
     const expandedSession = ref<ConversationSession | null>(null)
     const expanding = ref(false)
 
     onMounted(() => loadSessions(props.personaId))
+
+    async function onAddMemory() {
+      const text = newMemoryText.value.trim()
+      if (!text || addingMemory.value) return
+
+      addingMemory.value = true
+      const result = await addMemoryEntry(text, props.personaId)
+      if (result) newMemoryText.value = ''
+      addingMemory.value = false
+    }
 
     async function toggleSession(meta: SessionMeta) {
       if (expandedSession.value?.id === meta.id) {
@@ -54,15 +75,52 @@ export default defineComponent({
     }
 
     return {
-      sessions, loading, expandedSession, expanding,
-      toggleSession, onDelete, onClearAll, onNewSession, formatDate,
+      sessions,
+      loading,
+      newMemoryText,
+      addingMemory,
+      expandedSession,
+      expanding,
+      onAddMemory,
+      toggleSession,
+      onDelete,
+      onClearAll,
+      onNewSession,
+      formatDate,
     }
   },
 
   render() {
     return (
       <div style="max-width: 720px;">
-        {/* Actions */}
+        <p class="subtab-description">
+          Conversation history for this persona. Add a narrative memory below to save it to the
+          persona's memory file and include it in future LLM context.
+        </p>
+
+        {/* Add narrative memory — mirrors the Facts tab entry control */}
+        <div class="subtab-add-row">
+          <input
+            class="settings-field__input"
+            style="flex: 1;"
+            value={this.newMemoryText}
+            onInput={(e: Event) => { this.newMemoryText = (e.target as HTMLInputElement).value }}
+            onKeydown={(e: KeyboardEvent) => { if (e.key === 'Enter') this.onAddMemory() }}
+            placeholder="Add a memory manually…"
+            maxlength={2000}
+            disabled={this.addingMemory}
+          />
+          <button
+            class="settings-field__button"
+            onClick={() => this.onAddMemory()}
+            disabled={!this.newMemoryText.trim() || this.addingMemory}
+          >
+            <span class="settings-field__button-icon">add</span>
+            Add
+          </button>
+        </div>
+
+        {/* Conversation actions */}
         <div class="subtab-actions-row">
           <button class="settings-field__button" onClick={() => this.onNewSession()}>
             <span class="settings-field__button-icon">add</span>
@@ -81,7 +139,7 @@ export default defineComponent({
         ) : this.sessions.length === 0 ? (
           <div class="subtab-empty">
             <span class="subtab-empty__icon">chat_bubble_outline</span>
-            <span>No conversations yet. Start chatting with Ultron!</span>
+            <span>No conversations yet. Add a memory or start chatting with Ultron!</span>
           </div>
         ) : (
           <div class="subtab-cards">
@@ -98,20 +156,25 @@ export default defineComponent({
                       </div>
                     </div>
                     <div class="subtab-card__header-actions">
-                      <button class="subtab-card__action subtab-card__action--delete"
-                        onClick={(e: Event) => { e.stopPropagation(); this.onDelete(s.id) }} title="Delete">delete</button>
+                      <button
+                        class="subtab-card__action subtab-card__action--delete"
+                        onClick={(e: Event) => { e.stopPropagation(); this.onDelete(s.id) }}
+                        title="Delete"
+                      >delete</button>
                       <span class={['subtab-card__chevron', isExpanded && 'subtab-card__chevron--open']}>expand_more</span>
                     </div>
                   </div>
                   {isExpanded && this.expandedSession && (
                     <div class="subtab-card__messages">
-                      {this.expandedSession.messages.map((msg, i) => (
+                      {this.expanding ? (
+                        <div class="subtab-msg subtab-msg--empty">Loading memory…</div>
+                      ) : this.expandedSession.messages.map((msg, i) => (
                         <div key={i} class={['subtab-msg', `subtab-msg--${msg.role}`]}>
                           <span class="subtab-msg__icon">{msg.role === 'user' ? 'person' : 'smart_toy'}</span>
                           <span class="subtab-msg__text">{msg.text}</span>
                         </div>
                       ))}
-                      {this.expandedSession.messages.length === 0 && (
+                      {!this.expanding && this.expandedSession.messages.length === 0 && (
                         <div class="subtab-msg subtab-msg--empty">No messages in this session</div>
                       )}
                     </div>

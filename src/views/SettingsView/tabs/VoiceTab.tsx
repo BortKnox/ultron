@@ -133,14 +133,23 @@ export default defineComponent({
       testResult.value = null
 
       const tts = props.config.tts
+      const testInput = tts.provider === 'gemini'
+        ? {
+            provider: tts.provider,
+            apiKey: tts.providers?.gemini?.apiKey || undefined,
+            model: tts.providers?.gemini?.model || undefined,
+            voice: tts.providers?.gemini?.voice || undefined,
+          }
+        : tts.provider === 'elevenlabs'
+          ? {
+              provider: tts.provider,
+              apiKey: tts.providers?.elevenlabs?.apiKey || undefined,
+              model: tts.providers?.elevenlabs?.model || undefined,
+              voiceId: tts.providers?.elevenlabs?.voiceId || undefined,
+            }
+          : { provider: tts.provider }
       try {
-        const result = await api.audio.testTTSVoice.mutate({
-          provider: tts.provider,
-          apiKey: tts.providers?.gemini?.apiKey || tts.providers?.elevenlabs?.apiKey || undefined,
-          model: tts.providers?.gemini?.model || tts.providers?.elevenlabs?.model || undefined,
-          voice: tts.providers?.gemini?.voice || undefined,
-          voiceId: tts.providers?.elevenlabs?.voiceId || undefined,
-        })
+        const result = await api.audio.testTTSVoice.mutate(testInput)
         testResult.value = {
           kind: 'ok',
           message: `Test sent — ${((result as { bytes: number }).bytes / 1024).toFixed(0)} KB of audio. You should hear it now.`,

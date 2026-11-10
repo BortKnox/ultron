@@ -60,6 +60,8 @@ export interface MainEvents {
   'agent:command': [payload: { text: string }]
   /** Start a new conversation session */
   'agent:newSession': []
+  /** A manual memory entry was persisted for a persona */
+  'agent:memory-updated': [payload: { personaId: string }]
   /** Ephemeral action loop steps (displayed in MicrotaskIsland alongside queued tasks) */
   'agent:action-steps': [steps: Array<{
     id: string

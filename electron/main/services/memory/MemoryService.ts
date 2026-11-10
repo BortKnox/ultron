@@ -101,6 +101,31 @@ export class MemoryService extends BaseService {
   }
 
   /**
+   * Add a manually authored narrative entry to the persona's active memory
+   * file. It is stored as a normal user-context message so the next LLM call
+   * receives it through the same history path as conversation memory.
+   */
+  addMemoryEntry(personaId: string, text: string): SessionMeta {
+    const trimmed = text.trim()
+    if (!trimmed) throw new Error('Memory entry cannot be empty')
+
+    const session = this.getActiveSession(personaId)
+    if (session.messages.length === 0) session.title = 'Manual Memory'
+    session.messages.push({ role: 'user', text: trimmed })
+    session.updatedAt = new Date().toISOString()
+    this.saveSession(session)
+
+    return {
+      id: session.id,
+      personaId: session.personaId,
+      title: session.title,
+      messageCount: session.messages.length,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    }
+  }
+
+  /**
    * Append a user+model exchange to the active session and auto-save.
    */
   appendMessages(personaId: string, userMsg: LLMMessage, modelMsg: LLMMessage): void {

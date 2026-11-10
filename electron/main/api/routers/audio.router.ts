@@ -217,12 +217,25 @@ export const audioRouter = trpcRouter({
       const text = input.text?.trim() || 'Ultron online. Voice synthesis is working.'
       log.info(`TTS voice test (provider: ${input.provider ?? 'config default'})`)
 
-      return ttsService.testVoice(text, {
-        provider: input.provider,
-        apiKey: input.apiKey,
-        model: input.model,
-        voice: input.voice,
-        voiceId: input.voiceId,
-      })
+      const provider = input.provider
+
+      // Keep the test request provider-local at the IPC boundary. The Voice
+      // tab sends a shared shape for convenience, but ElevenLabs must never
+      // receive Gemini's voice field (or vice versa).
+      return ttsService.testVoice(text, provider === 'elevenlabs'
+        ? {
+            provider,
+            apiKey: input.apiKey,
+            model: input.model,
+            voiceId: input.voiceId,
+          }
+        : provider === 'gemini'
+          ? {
+              provider,
+              apiKey: input.apiKey,
+              model: input.model,
+              voice: input.voice,
+            }
+          : { provider })
     }),
 })

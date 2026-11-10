@@ -277,10 +277,13 @@ export class TTSService extends BaseService {
       return
     }
 
-    // Rebuild only when the voice actually changed for this provider
+    // Rebuild whenever any setting belonging to the selected provider changed.
+    // Comparing only the voice allowed a stale model/key to survive a provider
+    // switch or an in-place model edit.
     const config = getConfig()
     const target = this.resolveProviderConfig(config.tts.provider)
-    if (this.activeVoiceId !== target.voice) {
+    const targetFingerprint = this.fingerprint(config.tts.provider, target)
+    if (this.provider?.name !== config.tts.provider || this.providerFingerprint !== targetFingerprint) {
       this.buildProvider(config.tts.provider)
     }
 
@@ -345,9 +348,16 @@ export class TTSService extends BaseService {
     const providerName = overrides.provider || getConfig().tts.provider
     const base = this.resolveProviderConfig(providerName)
 
+    // Only fields owned by the selected provider are eligible as unsaved test
+    // overrides. Never let a Gemini voice/model (or voice id) cross into an
+    // ElevenLabs request, or vice versa.
     const apiKey = overrides.apiKey?.trim() || base.apiKey
     const model = overrides.model?.trim() || base.model
-    const voice = overrides.voice?.trim() || overrides.voiceId?.trim() || base.voice
+    const voice = providerName === 'gemini'
+      ? overrides.voice?.trim() || base.voice
+      : providerName === 'elevenlabs'
+        ? overrides.voiceId?.trim() || base.voice
+        : base.voice
 
     if (base.requiresApiKey && !apiKey) {
       throw new Error(

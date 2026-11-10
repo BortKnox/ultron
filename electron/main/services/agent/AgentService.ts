@@ -63,6 +63,7 @@ export class AgentService extends BaseService {
   private readonly boundOnDismissWarning = this.onDismissWarning.bind(this)
   private readonly boundOnPersonaSwitched = this.onPersonaSwitched.bind(this)
   private readonly boundOnNewSession = this.onNewSession.bind(this)
+  private readonly boundOnMemoryUpdated = this.onMemoryUpdated.bind(this)
   private readonly boundOnActionLog = this.onActionLog.bind(this)
   private readonly boundOnActionSteps = this.onActionSteps.bind(this)
 
@@ -116,6 +117,7 @@ export class AgentService extends BaseService {
     mainEventBus.on('agent:dismiss-warning', this.boundOnDismissWarning)
     mainEventBus.on('persona:switched', this.boundOnPersonaSwitched)
     mainEventBus.on('agent:newSession', this.boundOnNewSession)
+    mainEventBus.on('agent:memory-updated', this.boundOnMemoryUpdated)
     mainEventBus.on('agent:action-log', this.boundOnActionLog)
     mainEventBus.on('agent:action-steps', this.boundOnActionSteps)
 
@@ -129,6 +131,7 @@ export class AgentService extends BaseService {
     mainEventBus.off('agent:dismiss-warning', this.boundOnDismissWarning)
     mainEventBus.off('persona:switched', this.boundOnPersonaSwitched)
     mainEventBus.off('agent:newSession', this.boundOnNewSession)
+    mainEventBus.off('agent:memory-updated', this.boundOnMemoryUpdated)
     mainEventBus.off('agent:action-log', this.boundOnActionLog)
     mainEventBus.off('agent:action-steps', this.boundOnActionSteps)
     this.history = []
@@ -262,6 +265,14 @@ export class AgentService extends BaseService {
     this.queue.clear()
     this.stateMachine.reset()
     this.log.info('New conversation session started')
+  }
+
+  /** Handle a manual memory entry saved from the Personas UI */
+  private onMemoryUpdated(payload: { personaId: string }): void {
+    const activeId = this.personaService.getActive().id
+    if (payload.personaId !== activeId) return
+    this.history = this.memoryService.getContextMessages(activeId)
+    this.log.info(`Reloaded ${this.history.length} messages after manual memory update`)
   }
 
   /** Handle permission response from the UI */

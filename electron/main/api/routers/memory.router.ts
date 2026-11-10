@@ -84,4 +84,17 @@ export const memoryRouter = trpcRouter({
         updatedAt: session.updatedAt,
       }
     }),
+
+  /** Add a narrative memory entry to the selected persona's active file */
+  addMemoryEntry: publicProcedure
+    .input(z.object({ personaId: z.string().optional(), text: z.string().min(1).max(2000) }))
+    .mutation(({ input }): SessionMeta => {
+      const pid = input.personaId ?? activePersonaId()
+      const meta = ms().addMemoryEntry(pid, input.text)
+      log.info(`Added manual memory entry for persona ${pid}`)
+      // Refresh AgentService's in-memory history immediately, so the entry is
+      // injected into the next LLM request without requiring a restart.
+      mainEventBus.emit('agent:memory-updated', { personaId: pid })
+      return meta
+    }),
 })

@@ -95,6 +95,26 @@ export function useMemory() {
     }
   }
 
+  /** Add a narrative memory entry to the persona's active memory file */
+  async function addMemoryEntry(text: string, personaId?: string) {
+    try {
+      const meta = await api.memory.addMemoryEntry.mutate({
+        text,
+        personaId,
+      })
+      const existing = sessions.value.find((s) => s.id === meta.id)
+      if (existing) {
+        Object.assign(existing, meta)
+      } else {
+        sessions.value.unshift(meta)
+      }
+      return meta
+    } catch (err) {
+      console.error('[useMemory] Failed to add memory entry:', err)
+      return null
+    }
+  }
+
   return {
     sessions,
     loading,
@@ -103,5 +123,6 @@ export function useMemory() {
     deleteSession,
     clearSessions,
     newSession,
+    addMemoryEntry,
   }
 }
