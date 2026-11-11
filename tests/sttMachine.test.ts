@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { reduce, type SttContext, type SttEvent, type SttState } from '@/composables/stt/machine'
 
-const base: SttContext = { micArmed: true, autoListen: false, hardwareActive: true, error: '' }
+const base: SttContext = { autoListen: false, hardwareActive: true, error: '' }
 
 function transition(state: SttState, event: SttEvent, context: SttContext = base) {
   return reduce(state, context, event)
@@ -94,5 +94,17 @@ describe('STT machine', () => {
     const result = transition('live', { type: 'ORB_CLICK' }, { ...base, hardwareActive: false })
     expect(result.state).toBe('live')
     expect(result.effects).toEqual([])
+  })
+
+  it('cancels an active orb session with SUBMITTED', () => {
+    const result = transition('listening', { type: 'SUBMITTED' })
+    expect(result.state).toBe('live')
+    expect(result.effects.map((effect) => effect.type)).toEqual(['STOP_LISTENING'])
+  })
+
+  it('hardware loss while arming reaches off and releases capture', () => {
+    const result = transition('arming', { type: 'HARDWARE_LOST', reason: 'track ended' })
+    expect(result.state).toBe('off')
+    expect(result.effects.map((effect) => effect.type)).toEqual(['RELEASE', 'STOP_LISTENING'])
   })
 })

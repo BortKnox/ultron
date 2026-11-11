@@ -26,7 +26,6 @@ export type SttEffect =
   | { type: 'SHOW_WINDOW' }
 
 export interface SttContext {
-  micArmed: boolean
   autoListen: boolean
   hardwareActive: boolean
   error: string
