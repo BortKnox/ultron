@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { reduce, type SttContext, type SttEvent, type SttState } from '@/composables/stt/machine'
 
-const base: SttContext = { micArmed: true, autoListen: false, error: '' }
+const base: SttContext = { micArmed: true, autoListen: false, hardwareActive: true, error: '' }
 
 function transition(state: SttState, event: SttEvent, context: SttContext = base) {
   return reduce(state, context, event)
@@ -37,9 +37,9 @@ describe('STT machine', () => {
     ['hidden listening returns to live', 'listening', { type: 'WINDOW_HIDDEN' }, 'live', ['STOP_LISTENING']],
     ['hidden live remains live', 'live', { type: 'WINDOW_HIDDEN' }, 'live', []],
     ['shown live stays live when auto listen is off', 'live', { type: 'WINDOW_SHOWN' }, 'live', []],
-    ['hardware failure releases live capture', 'live', { type: 'HARDWARE_LOST', reason: 'no audio frames' }, 'error', ['RELEASE', 'STOP_LISTENING']],
-    ['hardware failure releases listening capture', 'listening', { type: 'HARDWARE_LOST', reason: 'track ended' }, 'error', ['RELEASE', 'STOP_LISTENING']],
-    ['hardware failure releases arming capture', 'arming', { type: 'HARDWARE_LOST', reason: 'context closed' }, 'error', ['RELEASE', 'STOP_LISTENING']],
+    ['hardware failure releases live capture', 'live', { type: 'HARDWARE_LOST', reason: 'no audio frames' }, 'off', ['RELEASE', 'STOP_LISTENING']],
+    ['hardware failure releases listening capture', 'listening', { type: 'HARDWARE_LOST', reason: 'track ended' }, 'off', ['RELEASE', 'STOP_LISTENING']],
+    ['hardware failure releases arming capture', 'arming', { type: 'HARDWARE_LOST', reason: 'context closed' }, 'off', ['RELEASE', 'STOP_LISTENING']],
     ['hardware failure is harmless when already off', 'off', { type: 'HARDWARE_LOST', reason: 'track ended' }, 'off', []],
   ]
 
@@ -82,5 +82,11 @@ describe('STT machine', () => {
     const result = transition('live', { type: 'WINDOW_SHOWN' }, { ...base, autoListen: true })
     expect(result.state).toBe('listening')
     expect(result.effects.map((effect) => effect.type)).toEqual(['START_LISTENING'])
+  })
+
+  it('cannot enter listening without hardwareActive', () => {
+    const result = transition('live', { type: 'WAKE_WORD', text: 'ultron hello' }, { ...base, hardwareActive: false })
+    expect(result.state).toBe('live')
+    expect(result.effects).toEqual([])
   })
 })
