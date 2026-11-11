@@ -3,21 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Neural Gyro Orb</title>
+<title>Neural Gyro Orb - Final Polish</title>
 <style>
   :root { color-scheme: dark; --accent: #ffb04a; }
   html, body { height: 100%; margin: 0; }
   body {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 22px; background: #020203; color: #7d7d8c;
+    gap: 15px; background: #020203; color: #7d7d8c;
     font-family: system-ui, -apple-system, Segoe UI, sans-serif; overflow: hidden;
   }
-  .orb { position: relative; width: min(88vmin, 680px); aspect-ratio: 1; }
+  .orb { position: relative; width: min(75vmin, 600px); aspect-ratio: 1; }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-  .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .ui-container { display: flex; flex-direction: column; gap: 8px; align-items: center; width: 100%; max-width: 800px;}
+  .controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 5px; color: #555; }
   button {
     background: transparent; border: 1px solid #2a2a30; color: #8a8a98;
-    padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 12px;
+    padding: 6px 12px; border-radius: 20px; cursor: pointer; font-size: 11px;
     letter-spacing: .04em; transition: border-color .4s, color .4s, background .4s, box-shadow .4s;
   }
   button:hover { color: var(--accent); border-color: var(--accent); }
@@ -26,21 +28,36 @@
     background: color-mix(in srgb, var(--accent) 10%, transparent);
     box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 30%, transparent);
   }
-  .hint { font-size: 11px; opacity: .55; text-align: center; }
+  .hint { font-size: 10px; opacity: .55; text-align: center; }
 </style>
 </head>
 <body>
 
   <div class="orb"><canvas id="orb"></canvas></div>
 
-  <div class="controls">
-    <button data-state="idle" class="active">Idle</button>
-    <button data-state="listening">Listening</button>
-    <button data-state="thinking">Thinking</button>
-    <button data-state="speaking">Speaking</button>
-    <button id="mic">Mic</button>
+  <div class="ui-container">
+    <div class="label">Functional States</div>
+    <div class="controls" id="functional-controls">
+      <button data-state="dormant">Dormant</button>
+      <button data-state="ready" class="active">Ready</button>
+      <button data-state="listening">Listening</button>
+      <button data-state="thinking">Thinking</button>
+      <button data-state="acting">Acting</button>
+      <button data-state="speaking">Speaking</button>
+      <button data-state="awaiting_permission">Awaiting</button>
+      <button data-state="fault_warning">Fault</button>
+    </div>
+    
+    <div class="label">Expression Modes (Speaking)</div>
+    <div class="controls" id="expression-controls">
+      <button data-state="cold_composure">Cold Composure</button>
+      <button data-state="dry_amusement">Dry Amusement</button>
+      <button data-state="rising_irritation">Rising Irritation</button>
+      <button data-state="controlled_fury">Controlled Fury</button>
+    </div>
+    
+    <div class="hint">keys 1-8 switch functional &nbsp;·&nbsp; Q,W,E,R switch expressions &nbsp;·&nbsp; window.orb.setState(name)</div>
   </div>
-  <div class="hint">keys 1–4 switch state &nbsp;·&nbsp; window.orb.setState(name) &nbsp;·&nbsp; setLevel(0..1) &nbsp;·&nbsp; setSpectrum([0..1,…])</div>
 
 <script>
 (() => {
@@ -113,7 +130,6 @@
     }
   }
   
-  // ADDED: Lbridge for the new synaptic connections
   const Lring = mkLayer(), Lcom1 = mkLayer(), Lcom2 = mkLayer(), Lcore = mkLayer(), Lspec = mkLayer(), Lgrid = mkLayer(), Lbridge = mkLayer();
   const dots = [], nodes = [];
 
@@ -171,41 +187,95 @@
   })();
 
   const STATES = {
-    idle:      { speed: .5,  trail: 1.1, spread: 1.0,  flat: 0,   spec: .22, ringSpin: .5,  act: .25, bloom: .55, glow: .8,  ampGain: .15,
-                 p: [255, 158, 48],  s: [255, 62, 70],   core: [255, 226, 170] },
-    listening: { speed: .75, trail: 1.0, spread: .92,  flat: .72, spec: .85, ringSpin: .6,  act: .55, bloom: .62, glow: .9,  ampGain: 1.0,
-                 p: [60, 192, 255],  s: [70, 100, 255],  core: [215, 246, 255] },
-    thinking:  { speed: 2.6, trail: 1.9, spread: 1.0,  flat: 0,   spec: .3,  ringSpin: 2.2, act: 1.0, bloom: .8,  glow: 1.0, ampGain: .25,
-                 p: [190, 92, 255],  s: [255, 80, 200],  core: [255, 218, 255] },
-    speaking:  { speed: 1.1, trail: 1.25, spread: 1.05, flat: 0,  spec: 1.0, ringSpin: 1.0, act: .8,  bloom: .72, glow: 1.0, ampGain: 1.0,
-                 p: [255, 190, 70],  s: [255, 238, 200], core: [255, 247, 224] }
+    dormant: { 
+      speed: 0.05, trail: 0.5, spread: 0.8, flat: 0.5, spec: 0.05, ringSpin: 0.05, act: 0.0, bloom: 0.2, glow: 0.3, ampGain: 0.0, vis: 0.06,
+      p: [60, 60, 70], s: [40, 40, 50], core: [80, 80, 90] 
+    },
+    ready: { 
+      speed: .5, trail: 1.1, spread: 1.0, flat: 0, spec: .22, ringSpin: .5, act: .25, bloom: .55, glow: .8, ampGain: .15,
+      p: [255, 158, 48], s: [255, 62, 70], core: [255, 226, 170] 
+    },
+    listening: { 
+      speed: .75, trail: 1.0, spread: .92, flat: .72, spec: .85, ringSpin: .6, act: .55, bloom: .62, glow: .9, ampGain: 1.0,
+      p: [60, 192, 255], s: [70, 100, 255], core: [215, 246, 255] 
+    },
+    thinking: { 
+      speed: 2.6, trail: 1.9, spread: 1.0, flat: 0.2, spec: .3, ringSpin: 2.2, act: 1.0, bloom: .8, glow: 1.0, ampGain: .25,
+      p: [190, 92, 255], s: [255, 80, 200], core: [255, 218, 255] 
+    },
+    acting: { 
+      speed: 1.5, trail: 1.5, spread: 1.1, flat: 0, spec: .1, ringSpin: 1.2, act: 1.0, bloom: .7, glow: 1.0, ampGain: .5,
+      p: [0, 255, 200], s: [0, 150, 255], core: [200, 255, 255] 
+    },
+    speaking: { 
+      speed: 1.1, trail: 1.25, spread: 1.05, flat: 0, spec: 1.0, ringSpin: 1.0, act: .8, bloom: .72, glow: 1.0, ampGain: 1.0,
+      p: [255, 190, 70], s: [255, 238, 200], core: [255, 247, 224] 
+    },
+    awaiting_permission: { 
+      speed: 0.2, trail: 1.0, spread: 1.0, flat: 1.0, spec: 0.2, ringSpin: 0.1, act: 0.2, bloom: .5, glow: .8, ampGain: .3,
+      p: [255, 180, 0], s: [200, 100, 0], core: [255, 240, 180] 
+    },
+    fault_warning: { 
+      speed: 0.5, trail: 0.5, spread: 0.9, flat: 0, spec: 0.0, ringSpin: 0.1, act: 0.8, bloom: .6, glow: .9, ampGain: 1.0,
+      p: [255, 50, 50], s: [150, 0, 0], core: [255, 150, 150] 
+    },
+    cold_composure: { 
+      speed: 0.5, trail: 0.8, spread: 1.0, flat: 0.1, spec: 0.6, ringSpin: 0.2, act: 0.4, bloom: .5, glow: .8, ampGain: .8,
+      p: [255, 230, 180], s: [200, 180, 150], core: [255, 255, 255] 
+    },
+    dry_amusement: { 
+      speed: 1.0, trail: 1.2, spread: 1.05, flat: 0, spec: 0.8, ringSpin: 0.8, act: 0.6, bloom: .65, glow: .9, ampGain: 1.0,
+      p: [255, 200, 100], s: [255, 100, 150], core: [255, 220, 200] 
+    },
+    rising_irritation: { 
+      speed: 1.8, trail: 1.4, spread: 0.95, flat: 0, spec: 0.9, ringSpin: 1.5, act: 0.8, bloom: .7, glow: 1.0, ampGain: 1.2,
+      p: [255, 120, 50], s: [255, 50, 50], core: [255, 180, 150] 
+    },
+    controlled_fury: { 
+      speed: 3.0, trail: 2.0, spread: 1.0, flat: 0, spec: 1.0, ringSpin: 2.5, act: 1.0, bloom: .9, glow: 1.0, ampGain: 1.5,
+      p: [255, 40, 40], s: [255, 255, 255], core: [255, 100, 150] 
+    }
   };
-  const NUM = ['speed', 'trail', 'spread', 'flat', 'spec', 'ringSpin', 'act', 'bloom', 'glow', 'ampGain'];
+
+  for (const k in STATES) if (STATES[k].vis === undefined) STATES[k].vis = 0.4 + 0.62 * STATES[k].act;
+
+  const NUM = ['speed', 'trail', 'spread', 'flat', 'spec', 'ringSpin', 'act', 'bloom', 'glow', 'ampGain', 'vis'];
   const COL = ['p', 's', 'core'];
   const cur = {};
-  for (const k of NUM) cur[k] = STATES.idle[k];
-  for (const k of COL) cur[k] = STATES.idle[k].slice();
+  for (const k of NUM) cur[k] = STATES.ready[k];
+  for (const k of COL) cur[k] = STATES.ready[k].slice();
 
-  let state = 'idle', tgt = STATES.idle, kick = 0, amp = 0, ext = null, extSpec = null;
+  let state = 'ready', tgt = STATES.ready, kick = 0, amp = 0, ext = null, extSpec = null;
   const waves = [];
 
   function setState(name) {
     if (!STATES[name] || name === state) return;
     state = name; tgt = STATES[name]; kick = 1;
     waves.push({ age: 0, str: 1 });
+    
     document.documentElement.style.setProperty('--accent', rgba(tgt.p, 1));
     document.querySelectorAll('button[data-state]').forEach(b => b.classList.toggle('active', b.dataset.state === name));
   }
+
   function simulate(s, t) {
-    if (s === 'speaking') {
+    if (s === 'speaking' || s === 'cold_composure' || s === 'dry_amusement' || s === 'rising_irritation' || s === 'controlled_fury') {
       const phrase = 0.55 + 0.45 * Math.sin(t * 1.7);
       const syl = Math.abs(Math.sin(t * 8.3 + Math.sin(t * 1.3) * 2.5));
       return clamp(phrase * syl * (0.6 + 0.4 * Math.sin(t * 3.1)), 0, 1);
     }
     if (s === 'listening') return clamp(0.2 + 0.28 * Math.abs(Math.sin(t * 3.7) * Math.sin(t * 1.9 + 1)) + 0.12 * Math.sin(t * 0.7), 0, 1);
     if (s === 'thinking') return 0.12 + 0.08 * Math.sin(t * 5);
+    if (s === 'acting') return 0.5 + 0.4 * Math.sin(t * 10);
+    if (s === 'fault_warning') {
+      // Deterministic broken rhythm (no Math.random per frame)
+      const base = 0.5 + 0.5 * Math.sin(t * 15);
+      const glitch = Math.sin(t * 40) * Math.sin(t * 7) > 0.7 ? 0.8 : 0; 
+      return clamp(base * 0.4 + glitch, 0, 1);
+    }
+    if (s === 'awaiting_permission') return 0.15 + 0.1 * Math.sin(t * 2);
     return 0.04;
   }
+
   function specLevel(j, half, t, a) {
     if (extSpec && extSpec.length) return clamp(extSpec[Math.floor((j / half) * (extSpec.length - 1))] || 0, 0, 1);
     if (micOn && micFreq) return micFreq[2 + Math.floor(Math.pow(j / half, 1.5) * 90)] / 255;
@@ -214,7 +284,6 @@
   }
 
   let micOn = false, analyser = null, micData = null, micFreq = null, micStream = null, micCtx = null;
-  const micBtn = document.getElementById('mic');
   const micLevel = () => {
     analyser.getByteTimeDomainData(micData);
     analyser.getByteFrequencyData(micFreq);
@@ -222,29 +291,16 @@
     for (let i = 0; i < micData.length; i++) { const v = (micData[i] - 128) / 128; s += v * v; }
     return clamp(Math.sqrt(s / micData.length) * 4, 0, 1);
   };
-  async function toggleMic() {
-    if (micOn) {
-      micOn = false; micBtn.classList.remove('active');
-      if (micStream) micStream.getTracks().forEach(t => t.stop());
-      if (micCtx) micCtx.close();
-      return;
-    }
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      micCtx = new (window.AudioContext || window.webkitAudioContext)();
-      analyser = micCtx.createAnalyser(); analyser.fftSize = 512;
-      micCtx.createMediaStreamSource(micStream).connect(analyser);
-      micData = new Uint8Array(analyser.fftSize);
-      micFreq = new Uint8Array(analyser.frequencyBinCount);
-      micOn = true; micBtn.classList.add('active');
-    } catch (e) { micBtn.textContent = 'Mic blocked'; }
-  }
-  micBtn.addEventListener('click', toggleMic);
+  
   document.querySelectorAll('button[data-state]').forEach(b => b.addEventListener('click', () => setState(b.dataset.state)));
+  
   window.addEventListener('keydown', e => {
-    const s = ['idle', 'listening', 'thinking', 'speaking'][+e.key - 1];
-    if (s) setState(s);
+    const fKeys = ['dormant', 'ready', 'listening', 'thinking', 'acting', 'speaking', 'awaiting_permission', 'fault_warning'];
+    const eKeys = ['cold_composure', 'dry_amusement', 'rising_irritation', 'controlled_fury'];
+    if (e.key >= '1' && e.key <= '8') setState(fKeys[+e.key - 1]);
+    if (['q','w','e','r'].includes(e.key.toLowerCase())) setState(eKeys[['q','w','e','r'].indexOf(e.key.toLowerCase())]);
   });
+  
   window.orb = {
     setState,
     setLevel: v => { ext = v == null ? null : clamp(+v, 0, 1); },
@@ -269,7 +325,6 @@
         px = P.x; py = P.y; pd = d; have = true;
       }
     }
-    // MODIFIED: Ticks now vibrate with the audio
     for (let k = 0; k < o.ticks; k++) {
       const ang = (k / o.ticks) * TAU, c = Math.cos(ang), s = Math.sin(ang), major = k % o.major === 0;
       const len = (major ? 13 : 5) * (1 + a * 0.8 + Math.sin(k * 1.5 + t * 8) * a * 0.5); 
@@ -284,7 +339,6 @@
     }
   }
 
-  // MODIFIED: Grid now warps inward with audio
   function drawGrid(M, a) {
     const GR = 206, SEG = 64;
     for (const lat of [-65, -40, -15, 15, 40, 65]) {
@@ -292,7 +346,6 @@
       let px = 0, py = 0, pd = 0;
       for (let s = 0; s <= SEG; s++) {
         const a2 = (s / SEG) * TAU;
-        // Gravity warp
         const warp = 1 - (a * 0.15 * Math.sin(a2 * 4)); 
         tp(M, r * Math.cos(a2) * warp, y * warp, r * Math.sin(a2) * warp, P);
         const d = P.z / GR * 0.5 + 0.5;
@@ -335,7 +388,6 @@
     if (spec > 0.35) seg(Lspec, pd, 1, px, py, (px + fx) / 2, (py + fy) / 2, fx, fy);
   }
 
-  // MODIFIED: Added energy arcs between vertices on audio spike
   function drawCrystal(CAM, t, a, cAng) {
     const breathe = 1 + 0.18 * a + 0.05 * Math.sin(t * 2) + 0.15 * kick;
     const layers = [
@@ -350,14 +402,18 @@
         seg(Lcore, ((A.z + B.z) * 0.5) / 80 * 0.5 + 0.5, L.wc, A.x, A.y, (A.x + B.x) / 2, (A.y + B.y) / 2, B.x, B.y);
       }
       
-      // ADDED: Lightning arcs between vertices when amp is high
-      if (a > 0.25 && L.wc === 2) {
-        const numArcs = Math.floor(a * 6);
+      if ((a > 0.25 || state === 'controlled_fury' || state === 'rising_irritation') && L.wc === 2) {
+        const numArcs = Math.floor(a * 6) + (state === 'controlled_fury' ? 10 : 0);
         for (let i = 0; i < numArcs; i++) {
-          const v1 = pv[Math.floor(Math.random() * 12)];
-          const v2 = pv[Math.floor(Math.random() * 12)];
-          const mx = (v1.x + v2.x) / 2 + (Math.random() - 0.5) * 40 * a;
-          const my = (v1.y + v2.y) / 2 + (Math.random() - 0.5) * 40 * a;
+          const idx1 = i % 12, idx2 = (i * 7 + 3) % 12;
+          const v1 = pv[idx1];
+          const v2 = pv[idx2];
+          
+          // Time-based deterministic jitter instead of Math.random() per frame
+          const jitter = 40 * Math.max(a, 0.5);
+          const mx = (v1.x + v2.x) / 2 + Math.sin(t * 40 + idx1) * Math.cos(t * 30 + idx2) * jitter;
+          const my = (v1.y + v2.y) / 2 + Math.cos(t * 45 + idx2) * Math.sin(t * 25 + idx1) * jitter;
+          
           seg(Lcore, 0.8, 1, v1.x, v1.y, mx, my, v2.x, v2.y);
         }
       }
@@ -384,15 +440,27 @@
     for (const key of NUM) cur[key] += (tgt[key] - cur[key]) * k;
     for (const key of COL) for (let c = 0; c < 3; c++) cur[key][c] += (tgt[key][c] - cur[key][c]) * k;
 
-    const target = micOn ? micLevel() : ext !== null ? ext : simulate(state, T);
+    let target = micOn ? micLevel() : ext !== null ? ext : simulate(state, T);
+    if (state === 'fault_warning' && !micOn && ext === null) {
+       target = 0.3 + 0.55 * (0.5 + 0.5 * Math.sin(T * 11)) + 0.15 * Math.max(0, Math.sin(T * 3.1) * Math.sin(T * 7.3));
+    }
+
     amp += (target - amp) * (target > amp ? 1 - Math.exp(-dt * 28) : 1 - Math.exp(-dt * 7));
     ampSlow += (amp - ampSlow) * (1 - Math.exp(-dt * 3));
     kick *= Math.exp(-dt * 2.2);
     const a = amp * cur.ampGain;
 
     cd -= dt; hb += dt;
-    if (cd <= 0 && cur.ampGain > 0.5 && amp - ampSlow > 0.18) { waves.push({ age: 0, str: clamp(0.5 + amp, 0, 1) }); cd = 0.28; }
-    if (hb > 4.2 - cur.act * 3) { hb = 0; waves.push({ age: 0, str: 0.35 + 0.3 * cur.act }); }
+    if (state === 'acting' && cd <= 0) {
+      waves.push({ age: 0, str: 0.8 + Math.random() * 0.4 });
+      cd = 0.8;
+    }
+    if (cd <= 0 && cur.ampGain > 0.5 && amp - ampSlow > 0.18) { 
+      waves.push({ age: 0, str: clamp(0.5 + amp, 0, 1) }); cd = 0.28; 
+    }
+    if (hb > 4.2 - cur.act * 3 && state !== 'acting') { 
+      hb = 0; waves.push({ age: 0, str: 0.35 + 0.3 * cur.act }); 
+    }
     for (let i = waves.length - 1; i >= 0; i--) { waves[i].age += dt * 0.75; if (waves[i].age >= 1) waves.splice(i, 1); }
 
     yaw += dt * (0.10 + 0.22 * cur.act);
@@ -401,13 +469,20 @@
     cAng += dt * (0.5 + 1.6 * cur.act);
     sAng += dt * 0.12;
     gridAng += dt * (0.05 + 0.05 * cur.act);
+    
+    let pitchOffset = 0;
+    if (state === 'dry_amusement') {
+      pitchOffset = Math.sin(T * 15) * 0.05 * Math.max(0, Math.sin(T * 2));
+    }
+
     for (let i = 0; i < 4; i++) { gA[i] += dt * GSPD[i] * cur.ringSpin; rPh[i] += dt * (0.6 + 0.4 * i) * (i % 2 ? -1 : 1) * cur.ringSpin; }
     for (let i = 0; i < ORB; i++) orbAng[i] += dt * orbits[i].w * cur.speed * (1 + 0.8 * kick);
 
-    const pitch = 0.42 + 0.14 * Math.sin(pitchPh) + 0.38 * cur.flat;
+    const pitch = 0.42 + 0.14 * Math.sin(pitchPh) + 0.38 * cur.flat + pitchOffset;
     const CAM = mMul(mRX(pitch), mRY(yaw));
+    
     const G0 = mMul(mRZ(0.12), mRY(gA[0]));
-    const G1 = mMul(G0, mRX(1.05 + gA[1]));
+    const G1 = mMul(G0, mRX(1.05 + gA[1] + (state === 'thinking' ? Math.sin(T*2)*0.2 : 0)));
     const G2 = mMul(G1, mRZ(0.7 + gA[2]));
     const G3 = mMul(G2, mRX(gA[3]));
     const Gs = [G0, G1, G2, G3];
@@ -444,7 +519,8 @@
     ctx.globalAlpha = 1;
 
     const spread = cur.spread * (1 + 0.06 * Math.sin(T * 1.1) + 0.10 * a + 0.07 * kick);
-    const fl = 1 - 0.85 * cur.flat, visThr = 0.4 + 0.62 * cur.act, step = 0.04 * cur.trail;
+    const fl = 1 - 0.85 * cur.flat, visThr = cur.vis, step = 0.04 * cur.trail;
+
     for (let kk = 0; kk < ORB; kk++) {
       const o = orbits[kk];
       const Tk = mMul(mRY(o.a0 + precAcc * o.pr), mRX(o.b));
@@ -460,27 +536,26 @@
           if (i === 0) dots.push(P.x, P.y, 1.7 + 1.0 * o.react);
           else seg(layer, ((P.z + pz) * 0.5) / ORB_R * 0.5 + 0.5, CL[i - 1], px, py, (px + P.x) / 2, (py + P.y) / 2, P.x, P.y);
           
-          // ADDED: Synaptic Bridge logic (connects outer comets to inner core)
-          if (i === 4 && a > 0.1 && Math.random() < 0.05) {
-            const dx = P.x * 0.6, dy = P.y * 0.6; // Pull toward center
+          // Increased bridge probability and weight
+          if (i === 4 && a > 0.1 && Math.random() < 0.15) {
+            const dx = P.x * 0.6, dy = P.y * 0.6; 
             const mx = (P.x + dx) / 2 + Math.sin(T * 5 + kk) * 30;
             const my = (P.y + dy) / 2 + Math.cos(T * 5 + kk) * 30;
-            seg(Lbridge, 0.5, 1, P.x, P.y, mx, my, dx, dy);
+            seg(Lbridge, 0.5, 2, P.x, P.y, mx, my, dx, dy); // Bumped weight class to 2
           }
-
           px = P.x; py = P.y; pz = P.z;
         }
       }
     }
 
     for (let i = 0; i < 4; i++) drawRing(mMul(CAM, Gs[i]), RINGS[i], rPh[i], T, a);
-    drawGrid(mMul(CAM, mRY(-gridAng)), a); // Passed 'a' to allow warping
+    drawGrid(mMul(CAM, mRY(-gridAng)), a); 
     drawSpectrum(mMul(CAM, mRX(0.75)), T, a, cur.spec, sAng);
     drawCrystal(CAM, T, a, cAng);
 
     const ringCol = mixc(cur.p, cur.core, 0.3);
     flush(Lgrid, mixc(cur.s, cur.p, 0.4), 0.3 + 0.2 * cur.act, 0.8);
-    flush(Lbridge, cur.p, 0.6 * a, 0.8); // Flush the new bridges (only visible based on amp)
+    flush(Lbridge, cur.p, 0.8 * a, 1.2); // Increased alpha and base line width
     flush(Lcom2, cur.s, 0.9, 0.9);
     flush(Lcom1, cur.p, 0.9, 0.9);
     flush(Lring, ringCol, 0.85, 1.0);
@@ -519,7 +594,7 @@
 
     requestAnimationFrame(frame);
   }
-  document.documentElement.style.setProperty('--accent', rgba(STATES.idle.p, 1));
+  document.documentElement.style.setProperty('--accent', rgba(STATES.ready.p, 1));
   requestAnimationFrame(frame);
 })();
 </script>
