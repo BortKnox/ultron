@@ -14,6 +14,18 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-2a2d33?style=for-the-badge" alt="License" /></a>
 </p>
 
+<p align="center">
+  Windows desktop app · Electron + Vue + TypeScript<br/>
+  <a href="#preview">Preview</a> · <a href="#control">Controls</a> · <a href="#install">Get started</a> · <a href="#build-from-source">Development</a> · <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+<p align="center">
+  <a href="https://htmlpreview.github.io/?https://github.com/BortKnox/ultron/blob/share/orb-mockup/docs/orb-preview/index.html">
+    <img src="docs/screenshots/orb-ready.webp" width="480" alt="Ultron neural gyro orb design preview: golden gyroscopic rings and orbiting particles around a crystalline core in the Ready state" />
+  </a><br/>
+  <sub>Neural gyro orb — next visual direction, design preview only. Not yet integrated into the desktop app.</sub>
+</p>
+
 ---
 
 ## This is Ultron
@@ -46,7 +58,7 @@ When it needs permission, it asks. Once.
 
 ## Control
 
-Three switches sit under the orb. Nothing important is buried in a settings
+Three controls sit under the orb. Nothing important is buried in a settings
 screen you have to hunt for. The orb itself is the entry point for a command.
 
 | Control | Behaviour |
@@ -110,17 +122,54 @@ Ultron's current interface uses a graphite-and-crimson identity: near-black
 surfaces, a focused accent, and an animated orb that responds to agent state.
 *Ultron crimson* is the default accent; your OS accent is one setting away.
 
-### Next visual direction — design preview only
+## Preview
 
 The next orb concept is a neural core: gyroscopic rings, orbiting particles,
 a crystalline centre, and a spectral ring for listening and speaking. It explores
 distinct functional states and expressive motion without making the orb a
 conventional dashboard.
 
-[View the standalone orb design preview](https://htmlpreview.github.io/?https://github.com/BortKnox/ultron/blob/share/orb-mockup/docs/orb-preview/index.html).
-Its buttons are demonstration controls, not the proposed widget layout. This is
-a design reference, **not a feature already integrated into the app**. Emotional
-expression driven by response content remains a proposed enhancement.
+[Explore the interactive orb preview](https://htmlpreview.github.io/?https://github.com/BortKnox/ultron/blob/share/orb-mockup/docs/orb-preview/index.html) to see the motion and switch between all eight functional states and four speaking expressions. Use **1–8** for states and **Q / W / E / R** for expressions.
+
+**Design preview only:** these are captures of the standalone mockup, not the running desktop app. Its buttons are demonstration controls, not the proposed widget layout. Emotional expression driven by response content remains a proposed enhancement.
+
+### Functional states
+
+<p align="center">
+  <img src="docs/screenshots/orb-ready.webp" width="220" alt="Ready orb design state" />
+  <img src="docs/screenshots/orb-listening.webp" width="220" alt="Listening orb design state" />
+  <img src="docs/screenshots/orb-thinking.webp" width="220" alt="Thinking orb design state" />
+  <img src="docs/screenshots/orb-speaking.webp" width="220" alt="Speaking orb design state" /><br/>
+  <sub>Ready · Listening · Thinking · Speaking — left to right, wrapping on smaller screens.</sub>
+</p>
+
+<details>
+<summary>Dormant, Acting, Awaiting permission and Fault</summary>
+
+<p align="center">
+  <img src="docs/screenshots/orb-dormant.webp" width="220" alt="Dormant orb design state" />
+  <img src="docs/screenshots/orb-acting.webp" width="220" alt="Acting orb design state" />
+  <img src="docs/screenshots/orb-awaiting-permission.webp" width="220" alt="Awaiting permission orb design state" />
+  <img src="docs/screenshots/orb-fault-warning.webp" width="220" alt="Fault warning orb design state" /><br/>
+  <sub>Dormant · Acting · Awaiting permission · Fault — left to right.</sub>
+</p>
+
+</details>
+
+<details>
+<summary>Speaking expressions: Cold Composure, Dry Amusement, Rising Irritation and Controlled Fury</summary>
+
+<p align="center">
+  <img src="docs/screenshots/orb-cold-composure.webp" width="220" alt="Cold Composure speaking expression design" />
+  <img src="docs/screenshots/orb-dry-amusement.webp" width="220" alt="Dry Amusement speaking expression design" />
+  <img src="docs/screenshots/orb-rising-irritation.webp" width="220" alt="Rising Irritation speaking expression design" />
+  <img src="docs/screenshots/orb-controlled-fury.webp" width="220" alt="Controlled Fury speaking expression design" /><br/>
+  <sub>Cold Composure · Dry Amusement · Rising Irritation · Controlled Fury — left to right.</sub>
+</p>
+
+</details>
+
+Capture provenance and refresh guidance live in [`docs/screenshots/README.md`](docs/screenshots/README.md). The older [`docs/preview.png`](docs/preview.png) is an upstream-era reference, not a screenshot of Ultron's current interface.
 
 Icons and marks are original geometry — generated by
 [`scripts/generate-icons.py`](scripts/generate-icons.py), not borrowed art.
@@ -129,7 +178,9 @@ Icons and marks are original geometry — generated by
 
 ## Install
 
-1. Download the latest installer from [Releases](https://github.com/BortKnox/ultron/releases).
+Windows is the supported target. Packaged installers will appear in [Releases](https://github.com/BortKnox/ultron/releases); none are published yet. For now, use [Build from source](#build-from-source), then configure the app below.
+
+1. When an installer is available, download it from [Releases](https://github.com/BortKnox/ultron/releases).
 2. Install and launch. Ultron appears in the system tray.
 3. Create a **Gemini API key** at [Google AI Studio](https://aistudio.google.com/apikey).
 4. Tray icon → **Settings** → **Intelligence** → paste the key.
@@ -173,6 +224,10 @@ npm run build       # lint + typecheck + bundle + installer
 
 Design notes and the audit trail live in [`docs/ULTRON.md`](docs/ULTRON.md);
 the Gemini voice pipeline is documented in [`docs/GEMINI-TTS.md`](docs/GEMINI-TTS.md).
+
+## Contributing
+
+Bug reports, visual refinements and focused fixes are welcome. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) for the branch, verification and pull-request workflow. Report issues with reproduction steps and logs, removing API keys and personal information first.
 
 ---
 
