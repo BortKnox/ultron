@@ -170,53 +170,59 @@ async function loadModel(): Promise<void> {
 // ── Mic lifecycle ──
 
 async function startMic(): Promise<void> {
-  if (!model) await loadModel()
-  if (!model) return
+  try {
+    if (!model) await loadModel()
+    if (!model) throw new Error('Speech model failed to load.')
 
-  const sampleRate = 16000
+    const sampleRate = 16000
 
-  recognizer = new model.KaldiRecognizer(sampleRate)
-  recognizer.on('result', onResult)
-  recognizer.on('partialresult', onPartialResult)
+    recognizer = new model.KaldiRecognizer(sampleRate)
+    recognizer.on('result', onResult)
+    recognizer.on('partialresult', onPartialResult)
 
-  mediaStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      sampleRate: { ideal: sampleRate },
-      channelCount: 1,
-      echoCancellation: true,
-      noiseSuppression: true,
-    },
-  })
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        sampleRate: { ideal: sampleRate },
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+      },
+    })
 
-  audioContext = new AudioContext({ sampleRate })
-  sourceNode = audioContext.createMediaStreamSource(mediaStream)
+    audioContext = new AudioContext({ sampleRate })
+    sourceNode = audioContext.createMediaStreamSource(mediaStream)
 
-  // Use AudioWorklet if available (off-main-thread), fallback to ScriptProcessor
-  await audioContext.audioWorklet.addModule(createWorkletBlob())
-  const workletNode = new AudioWorkletNode(audioContext, 'stt-processor')
-  workletNode.port.onmessage = (e) => {
-    if (!recognizer) return
-    // During TTS: only process audio for wake word detection (idle phase)
-    // Skip feeding audio when actively listening to avoid TTS echo
-    if (ttsSpeaking && phase.value !== 'live') return
+    // Use AudioWorklet if available (off-main-thread), fallback to ScriptProcessor
+    await audioContext.audioWorklet.addModule(createWorkletBlob())
+    const workletNode = new AudioWorkletNode(audioContext, 'stt-processor')
+    workletNode.port.onmessage = (e) => {
+      if (!recognizer) return
+      // During TTS: only process audio for wake word detection (live phase)
+      // Skip feeding audio when actively listening to avoid TTS echo
+      if (ttsSpeaking && phase.value !== 'live') return
 
-    const samples = e.data as Float32Array
-    const buf = audioContext!.createBuffer(1, samples.length, sampleRate)
-    buf.getChannelData(0).set(samples)
-    recognizer.acceptWaveform(buf)
+      const samples = e.data as Float32Array
+      const buf = audioContext!.createBuffer(1, samples.length, sampleRate)
+      buf.getChannelData(0).set(samples)
+      recognizer.acceptWaveform(buf)
+    }
+    sourceNode.connect(workletNode)
+    workletNode.connect(audioContext.destination)
+
+    dispatch({ type: 'ARMED' })
+    initVisibilityWatch()
+    console.info('[useSTT] Mic started, listening for wake word...')
+  } catch (err) {
+    const reason = describeMicError(err)
+    dispatch({ type: 'ARM_FAILED', reason })
+    throw err
   }
-  sourceNode.connect(workletNode)
-  workletNode.connect(audioContext.destination)
-
-  dispatch({ type: 'ARMED' })
-  initVisibilityWatch()
-  console.info('[useSTT] Mic started, listening for wake word...')
 }
 
 async function stopMic(): Promise<void> {
   clearSilenceTimer()
 
-  const effects = dispatch({ type: 'MIC_OFF' })
+  dispatch({ type: 'MIC_OFF' })
 
   const oldContext = audioContext
   sourceNode?.disconnect()
@@ -232,10 +238,11 @@ async function stopMic(): Promise<void> {
 
   transcript.value = ''
   chunks.value = []
-  if (effects.some((effect) => effect.type === 'RELEASE')) {
-    // The reducer announces the release; this function performs the actual
-    // asynchronous resource teardown owned by the composable.
-    await oldContext?.close().catch(() => {})
+  // Always close the captured context. A second stop can be issued after the
+  // reducer is already `off`, but the baseline resource teardown must remain
+  // idempotent and unconditional.
+  if (oldContext) {
+    await oldContext.close().catch(() => {})
   }
 }
 
@@ -402,7 +409,8 @@ function describeMicError(err: unknown): string {
 // ── Public API ──
 
 async function enable(): Promise<void> {
-  if (phase.value !== 'off') return
+  if (phase.value !== 'off' && phase.value !== 'error' && phase.value !== 'arming') return
+  if (phase.value !== 'off') await stopMic()
   micError.value = ''
 
   try {
@@ -412,7 +420,6 @@ async function enable(): Promise<void> {
   } catch (err) {
     console.error('[useSTT] Failed to enable microphone:', err)
     micError.value = describeMicError(err)
-    dispatch({ type: 'ARM_FAILED', reason: micError.value })
     // Make sure a half-started capture cannot linger
     await stopMic()
   }
@@ -433,7 +440,7 @@ function setAutoListen(enabled: boolean): void {
 export function useSTT() {
   const isActivated = computed(() => phase.value === 'listening')
   /** True while the microphone is actually capturing audio */
-  const micActive = computed(() => phase.value !== 'off')
+  const micActive = computed(() => phase.value === 'live' || phase.value === 'listening')
 
   return {
     phase,

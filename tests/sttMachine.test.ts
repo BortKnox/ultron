@@ -23,9 +23,7 @@ describe('STT machine', () => {
     ['live ignores final text without wake word', 'live', { type: 'FINAL', text: 'hello' }, 'live', []],
     ['listening accepts partial text', 'listening', { type: 'PARTIAL', text: 'hello' }, 'listening', []],
     ['listening accepts final text', 'listening', { type: 'FINAL', text: 'hello' }, 'listening', []],
-    ['listening submits on silence', 'listening', { type: 'SILENCE' }, 'live', ['SUBMIT', 'STOP_LISTENING']],
     ['listening submits explicitly', 'listening', { type: 'SUBMITTED' }, 'live', ['STOP_LISTENING']],
-    ['live ignores silence', 'live', { type: 'SILENCE' }, 'live', []],
     ['live ignores submitted', 'live', { type: 'SUBMITTED' }, 'live', []],
     ['off ignores wake word', 'off', { type: 'WAKE_WORD', text: 'ultron hello' }, 'off', []],
     ['arming ignores wake word', 'arming', { type: 'WAKE_WORD', text: 'ultron hello' }, 'arming', []],
@@ -39,7 +37,6 @@ describe('STT machine', () => {
     ['hidden listening returns to live', 'listening', { type: 'WINDOW_HIDDEN' }, 'live', ['STOP_LISTENING']],
     ['hidden live remains live', 'live', { type: 'WINDOW_HIDDEN' }, 'live', []],
     ['shown live stays live when auto listen is off', 'live', { type: 'WINDOW_SHOWN' }, 'live', []],
-    ['shown live remains live in the baseline context', 'live', { type: 'WINDOW_SHOWN' }, 'live', []],
     ['hardware failure releases live capture', 'live', { type: 'HARDWARE_LOST', reason: 'no audio frames' }, 'error', ['RELEASE', 'STOP_LISTENING']],
     ['hardware failure releases listening capture', 'listening', { type: 'HARDWARE_LOST', reason: 'track ended' }, 'error', ['RELEASE', 'STOP_LISTENING']],
     ['hardware failure releases arming capture', 'arming', { type: 'HARDWARE_LOST', reason: 'context closed' }, 'error', ['RELEASE', 'STOP_LISTENING']],
@@ -58,6 +55,27 @@ describe('STT machine', () => {
 
   it('preserves an error reason from hardware failure', () => {
     expect(transition('live', { type: 'HARDWARE_LOST', reason: 'AudioContext closed' }).error).toBe('AudioContext closed')
+  })
+
+  it('can be re-enabled after a failed arm', () => {
+    const failed = transition('arming', { type: 'ARM_FAILED', reason: 'permission denied' })
+    expect(failed.state).toBe('error')
+
+    const stopped = transition(failed.state, { type: 'MIC_OFF' })
+    expect(stopped.state).toBe('off')
+
+    const retry = transition(stopped.state, { type: 'MIC_ON' })
+    expect(retry.state).toBe('arming')
+    expect(retry.effects.map((effect) => effect.type)).toEqual(['ACQUIRE'])
+  })
+
+  it('can recover from a stuck arming state by turning capture off first', () => {
+    const stopped = transition('arming', { type: 'MIC_OFF' })
+    expect(stopped.state).toBe('off')
+    expect(stopped.effects.map((effect) => effect.type)).toEqual(['RELEASE', 'STOP_LISTENING'])
+
+    const retry = transition(stopped.state, { type: 'MIC_ON' })
+    expect(retry.state).toBe('arming')
   })
 
   it('starts a session when a live capture is shown with auto-listen enabled', () => {

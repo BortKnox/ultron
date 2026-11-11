@@ -9,7 +9,6 @@ export type SttEvent =
   | { type: 'WAKE_WORD'; text: string }
   | { type: 'PARTIAL'; text: string }
   | { type: 'FINAL'; text: string }
-  | { type: 'SILENCE' }
   | { type: 'SUBMITTED' }
   | { type: 'AGENT_IDLE' }
   | { type: 'TTS_STARTED' }
@@ -77,12 +76,7 @@ export function reduce(state: SttState, _ctx: SttContext, event: SttEvent): SttT
 
     case 'PARTIAL':
     case 'FINAL':
-      return state === 'listening' ? stay(state) : stay(state)
-
-    case 'SILENCE':
-      return state === 'listening'
-        ? { state: 'live', effects: [{ type: 'SUBMIT' }, { type: 'STOP_LISTENING' }] }
-        : stay(state)
+      return stay(state)
 
     case 'SUBMITTED':
       return state === 'listening'
@@ -90,6 +84,7 @@ export function reduce(state: SttState, _ctx: SttContext, event: SttEvent): SttT
         : stay(state)
 
     case 'HARDWARE_LOST':
+      // PR-3 will execute RELEASE through the serialized capture engine.
       return state === 'off'
         ? stay(state)
         : { state: 'error', effects: [{ type: 'RELEASE' }, { type: 'STOP_LISTENING' }], error: event.reason }
