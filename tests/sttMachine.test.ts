@@ -27,9 +27,9 @@ describe('STT machine', () => {
     ['live ignores submitted', 'live', { type: 'SUBMITTED' }, 'live', []],
     ['off ignores wake word', 'off', { type: 'WAKE_WORD', text: 'ultron hello' }, 'off', []],
     ['arming ignores wake word', 'arming', { type: 'WAKE_WORD', text: 'ultron hello' }, 'arming', []],
-    ['off ignores orb click in baseline', 'off', { type: 'ORB_CLICK' }, 'off', []],
-    ['live ignores orb click in baseline', 'live', { type: 'ORB_CLICK' }, 'live', []],
-    ['listening ignores orb click in baseline', 'listening', { type: 'ORB_CLICK' }, 'listening', []],
+    ['off ignores orb click when microphone is off', 'off', { type: 'ORB_CLICK' }, 'off', []],
+    ['live orb click starts a command session', 'live', { type: 'ORB_CLICK' }, 'listening', ['START_LISTENING']],
+    ['listening ignores duplicate orb click', 'listening', { type: 'ORB_CLICK' }, 'listening', []],
     ['live stays live after agent idle', 'live', { type: 'AGENT_IDLE' }, 'live', []],
     ['listening stays listening after agent idle', 'listening', { type: 'AGENT_IDLE' }, 'listening', []],
     ['live ignores TTS start', 'live', { type: 'TTS_STARTED' }, 'live', []],
@@ -86,6 +86,12 @@ describe('STT machine', () => {
 
   it('cannot enter listening without hardwareActive', () => {
     const result = transition('live', { type: 'WAKE_WORD', text: 'ultron hello' }, { ...base, hardwareActive: false })
+    expect(result.state).toBe('live')
+    expect(result.effects).toEqual([])
+  })
+
+  it('cannot start an orb command session without hardwareActive', () => {
+    const result = transition('live', { type: 'ORB_CLICK' }, { ...base, hardwareActive: false })
     expect(result.state).toBe('live')
     expect(result.effects).toEqual([])
   })

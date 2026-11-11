@@ -101,6 +101,10 @@ export function reduce(state: SttState, _ctx: SttContext, event: SttEvent): SttT
         : stay(state)
 
     case 'ORB_CLICK':
+      return state === 'live' && _ctx.hardwareActive
+        ? { state: 'listening', effects: [{ type: 'START_LISTENING' }] }
+        : stay(state)
+
     case 'AGENT_IDLE':
     case 'TTS_STARTED':
     case 'TTS_ENDED':

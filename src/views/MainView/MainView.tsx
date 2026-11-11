@@ -73,6 +73,8 @@ export default defineComponent({
       isModelLoading,
       enable: enableSTT,
       disable: disableSTT,
+      engageCommand,
+      stopCommandSession,
       setAutoListen,
     } = useSTT()
 
@@ -253,6 +255,15 @@ export default defineComponent({
         showInput.value = true
       }
     }
+
+    function onOrbClick() {
+      if (micActive.value) {
+        engageCommand()
+      } else {
+        toggleInput()
+      }
+    }
+
     function closeInput() {
       if (!showInput.value || inputDismissing.value) return
       inputDismissing.value = true
@@ -351,6 +362,7 @@ export default defineComponent({
       showInput,
       inputDismissing,
       toggleInput,
+      onOrbClick,
       closeInput,
       permissionDismissing,
       onPermissionRespond,
@@ -369,6 +381,7 @@ export default defineComponent({
       voiceEnabled,
       speechEnabled,
       toggleMic,
+      stopCommandSession,
       toggleSpeech,
       openSettings,
     }
@@ -470,10 +483,10 @@ export default defineComponent({
             )}
           </div>
 
-          {/* Orb — reflects agent state; click toggles InputBar */}
+          {/* Orb — engages a command session when capture is armed; otherwise opens text input */}
           <div
             class="main-view__orb-area animate-orb-in"
-            onClick={this.toggleInput}
+            onClick={this.onOrbClick}
             onMouseenter={this.onMouseEnterUI}
             onMouseleave={this.onMouseLeaveUI}
           >
@@ -510,6 +523,7 @@ export default defineComponent({
                 visible={!this.inputDismissing}
                 onClose={this.closeInput}
                 onSubmit={(text: string) => {
+                  this.stopCommandSession()
                   this.sendCommand(text)
                 }}
               />
