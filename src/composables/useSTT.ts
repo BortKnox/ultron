@@ -462,6 +462,22 @@ function clearSilenceTimer(): void {
   }
 }
 
+/** Start a command session without changing microphone hardware state. */
+function engageCommand(): void {
+  if (!hardwareActive.value || phase.value !== 'live') return
+  transcript.value = ''
+  chunks.value = []
+  dispatch({ type: 'ORB_CLICK' })
+}
+
+/** End only the current command session; keep armed capture hot for wake words. */
+function stopCommandSession(): void {
+  clearSilenceTimer()
+  transcript.value = ''
+  chunks.value = []
+  dispatch({ type: 'SUBMITTED' })
+}
+
 function submitTranscript(): void {
   const fullText = chunks.value.join(' ').trim()
   if (!fullText) return
@@ -550,7 +566,9 @@ export function useSTT() {
     isModelLoaded,
     isModelLoading,
     enable,
-    disable,
-    setAutoListen,
+      disable,
+      engageCommand,
+      stopCommandSession,
+      setAutoListen,
   }
 }
