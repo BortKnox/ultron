@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neural Gyro Orb</title>
+<style>
+  :root { color-scheme: dark; --accent: #ffb04a; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 22px; background: #020203; color: #7d7d8c;
+    font-family: system-ui, -apple-system, Segoe UI, sans-serif; overflow: hidden;
+  }
+  .orb { position: relative; width: min(88vmin, 680px); aspect-ratio: 1; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  button {
+    background: transparent; border: 1px solid #2a2a30; color: #8a8a98;
+    padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 12px;
+    letter-spacing: .04em; transition: border-color .4s, color .4s, background .4s, box-shadow .4s;
+  }
+  button:hover { color: var(--accent); border-color: var(--accent); }
+  button.active {
+    border-color: var(--accent); color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .hint { font-size: 11px; opacity: .55; text-align: center; }
+</style>
+</head>
+<body>
+
+  <div class="orb"><canvas id="orb"></canvas></div>
+
+  <div class="controls">
+    <button data-state="idle" class="active">Idle</button>
+    <button data-state="listening">Listening</button>
+    <button data-state="thinking">Thinking</button>
+    <button data-state="speaking">Speaking</button>
+    <button id="mic">Mic</button>
+  </div>
+  <div class="hint">keys 1–4 switch state &nbsp;·&nbsp; window.orb.setState(name) &nbsp;·&nbsp; setLevel(0..1) &nbsp;·&nbsp; setSpectrum([0..1,…])</div>
+
+<script>
+(() => {
+  'use strict';
+  const TAU = Math.PI * 2, PERSP = 820, BASE = 600, NB = 6, WC = 4;
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+  const mixc = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+  const canvas = document.getElementById('orb');
+  const ctx = canvas.getContext('2d');
+  const bloomA = document.createElement('canvas'), bA = bloomA.getContext('2d');
+  const bloomB = document.createElement('canvas'), bB = bloomB.getContext('2d');
+  let size = BASE;
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    size = Math.max(240, Math.round(rect.width * dpr));
+    canvas.width = canvas.height = size;
+    bloomA.width = bloomA.height = Math.max(32, size >> 2);
+    bloomB.width = bloomB.height = Math.max(16, Math.round(size / 12));
+  }
+  new ResizeObserver(resize).observe(canvas);
+  resize();
+
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const mRX = a => { const c = Math.cos(a), s = Math.sin(a); return [1, 0, 0, 0, c, -s, 0, s, c]; };
+  const mRY = a => { const c = Math.cos(a), s = Math.sin(a); return [c, 0, s, 0, 1, 0, -s, 0, c]; };
+  const mRZ = a => { const c = Math.cos(a), s = Math.sin(a); return [c, -s, 0, s, c, 0, 0, 0, 1]; };
+  function mMul(A, B) {
+    const o = new Array(9);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++)
+      o[r * 3 + c] = A[r * 3] * B[c] + A[r * 3 + 1] * B[3 + c] + A[r * 3 + 2] * B[6 + c];
+    return o;
+  }
+  function tp(M, x, y, z, out) {
+    const X = M[0] * x + M[1] * y + M[2] * z, Y = M[3] * x + M[4] * y + M[5] * z, Z = M[6] * x + M[7] * y + M[8] * z;
+    const f = PERSP / (PERSP - Z);
+    out.x = X * f; out.y = Y * f; out.z = Z;
+  }
+  const P = { x: 0, y: 0, z: 0 }, Q = { x: 0, y: 0, z: 0 };
+
+  const WMUL = [0.5, 1.0, 1.9, 3.4], AMUL = [0.55, 0.8, 0.95, 1.0];
+  const mkLayer = () => Array.from({ length: NB * WC }, () => []);
+  const seg = (layer, depth, w, a, b, c, d, e, f) =>
+    layer[((clamp(depth, 0, 0.999) * NB) | 0) * WC + w].push(a, b, c, d, e, f);
+  function flush(layer, col, alpha, lw) {
+    for (let i = 0; i < NB * WC; i++) {
+      const arr = layer[i];
+      if (!arr.length) continue;
+      const b = (i / WC) | 0, w = i % WC, k = (b + 0.5) / NB;
+      ctx.strokeStyle = rgba(col, Math.min(1, alpha * AMUL[w] * (0.08 + 0.92 * k * k) * (w > 1 ? 1.25 : 1)));
+      ctx.lineWidth = lw * WMUL[w] * (0.7 + 0.6 * k);
+      ctx.beginPath();
+      for (let j = 0; j < arr.length; j += 6) {
+        ctx.moveTo(arr[j], arr[j + 1]);
+        ctx.quadraticCurveTo(arr[j + 2], arr[j + 3], arr[j + 4], arr[j + 5]);
+      }
+      ctx.stroke();
+      arr.length = 0;
+    }
+  }
+  
+  // ADDED: Lbridge for the new synaptic connections
+  const Lring = mkLayer(), Lcom1 = mkLayer(), Lcom2 = mkLayer(), Lcore = mkLayer(), Lspec = mkLayer(), Lgrid = mkLayer(), Lbridge = mkLayer();
+  const dots = [], nodes = [];
+
+  const ORB = 34, COM = 4, TAIL = 15, ORB_R = 238;
+  const CL = [3, 3, 2, 2, 2, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0];
+  const orbAng = new Float32Array(ORB);
+  const orbits = (() => {
+    const rand = rng(2026), out = [], ga = Math.PI * (3 - Math.sqrt(5));
+    for (let k = 0; k < ORB; k++) {
+      out.push({
+        a0: k * ga, b: Math.acos(1 - (2 * (k + 0.5)) / ORB),
+        r: 0.5 + 0.5 * Math.pow(rand(), 0.7),
+        w: (0.35 + 0.9 * rand()) * (rand() < 0.5 ? -1 : 1),
+        pr: (0.15 + 0.35 * rand()) * (rand() < 0.5 ? -1 : 1),
+        par: k % 2, ts: 0.7 + 0.6 * rand(), react: 0.5 + rand(),
+        off: Array.from({ length: COM }, () => rand() * 0.4),
+        vis: Array.from({ length: COM }, () => rand())
+      });
+      orbAng[k] = rand() * TAU;
+    }
+    return out;
+  })();
+
+  const RINGS = [
+    { R: 254, band: 6, ticks: 72, major: 6, arcs: 2, arcT: 0.55, base: 1, react: 1.0 },
+    { R: 238, band: 4, ticks: 48, major: 4, arcs: 3, arcT: 0.60, base: 1, react: 1.0 },
+    { R: 222, band: 3, ticks: 36, major: 3, arcs: 2, arcT: 0.50, base: 1, react: 0.6 },
+    { R: 178, band: 0, ticks: 24, major: 6, arcs: 4, arcT: 0.30, base: 0, react: 0.3 }
+  ];
+  const gA = [0, 0, 0, 0], rPh = [0, 0, 0, 0];
+  const GSPD = [0.22, -0.31, 0.43, -0.70];
+
+  const ICO = (() => {
+    const ph = (1 + Math.sqrt(5)) / 2;
+    const V = [[-1, ph, 0], [1, ph, 0], [-1, -ph, 0], [1, -ph, 0], [0, -1, ph], [0, 1, ph],
+               [0, -1, -ph], [0, 1, -ph], [ph, 0, -1], [ph, 0, 1], [-ph, 0, -1], [-ph, 0, 1]]
+      .map(v => { const l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; });
+    const adj = (i, j) => { const d = Math.pow(V[i][0] - V[j][0], 2) + Math.pow(V[i][1] - V[j][1], 2) + Math.pow(V[i][2] - V[j][2], 2); return d > 1.0 && d < 1.2; };
+    const E = [], F = [];
+    for (let i = 0; i < 12; i++) for (let j = i + 1; j < 12; j++) if (adj(i, j)) {
+      E.push([i, j]);
+      for (let k = j + 1; k < 12; k++) if (adj(i, k) && adj(j, k)) F.push([i, j, k]);
+    }
+    return { V, E, F };
+  })();
+  const pv = Array.from({ length: 12 }, () => ({ x: 0, y: 0, z: 0 }));
+
+  const DUST = 260, dust = (() => {
+    const rand = rng(404), d = [];
+    for (let i = 0; i < DUST; i++) {
+      const y = rand() * 2 - 1, th = rand() * TAU, r = Math.sqrt(1 - y * y), R = 285 + rand() * 150;
+      d.push({ x: Math.cos(th) * r * R, y: y * R, z: Math.sin(th) * r * R, ph: rand() * TAU, s: 0.8 + rand() * 1.1 });
+    }
+    return d;
+  })();
+
+  const STATES = {
+    idle:      { speed: .5,  trail: 1.1, spread: 1.0,  flat: 0,   spec: .22, ringSpin: .5,  act: .25, bloom: .55, glow: .8,  ampGain: .15,
+                 p: [255, 158, 48],  s: [255, 62, 70],   core: [255, 226, 170] },
+    listening: { speed: .75, trail: 1.0, spread: .92,  flat: .72, spec: .85, ringSpin: .6,  act: .55, bloom: .62, glow: .9,  ampGain: 1.0,
+                 p: [60, 192, 255],  s: [70, 100, 255],  core: [215, 246, 255] },
+    thinking:  { speed: 2.6, trail: 1.9, spread: 1.0,  flat: 0,   spec: .3,  ringSpin: 2.2, act: 1.0, bloom: .8,  glow: 1.0, ampGain: .25,
+                 p: [190, 92, 255],  s: [255, 80, 200],  core: [255, 218, 255] },
+    speaking:  { speed: 1.1, trail: 1.25, spread: 1.05, flat: 0,  spec: 1.0, ringSpin: 1.0, act: .8,  bloom: .72, glow: 1.0, ampGain: 1.0,
+                 p: [255, 190, 70],  s: [255, 238, 200], core: [255, 247, 224] }
+  };
+  const NUM = ['speed', 'trail', 'spread', 'flat', 'spec', 'ringSpin', 'act', 'bloom', 'glow', 'ampGain'];
+  const COL = ['p', 's', 'core'];
+  const cur = {};
+  for (const k of NUM) cur[k] = STATES.idle[k];
+  for (const k of COL) cur[k] = STATES.idle[k].slice();
+
+  let state = 'idle', tgt = STATES.idle, kick = 0, amp = 0, ext = null, extSpec = null;
+  const waves = [];
+
+  function setState(name) {
+    if (!STATES[name] || name === state) return;
+    state = name; tgt = STATES[name]; kick = 1;
+    waves.push({ age: 0, str: 1 });
+    document.documentElement.style.setProperty('--accent', rgba(tgt.p, 1));
+    document.querySelectorAll('button[data-state]').forEach(b => b.classList.toggle('active', b.dataset.state === name));
+  }
+  function simulate(s, t) {
+    if (s === 'speaking') {
+      const phrase = 0.55 + 0.45 * Math.sin(t * 1.7);
+      const syl = Math.abs(Math.sin(t * 8.3 + Math.sin(t * 1.3) * 2.5));
+      return clamp(phrase * syl * (0.6 + 0.4 * Math.sin(t * 3.1)), 0, 1);
+    }
+    if (s === 'listening') return clamp(0.2 + 0.28 * Math.abs(Math.sin(t * 3.7) * Math.sin(t * 1.9 + 1)) + 0.12 * Math.sin(t * 0.7), 0, 1);
+    if (s === 'thinking') return 0.12 + 0.08 * Math.sin(t * 5);
+    return 0.04;
+  }
+  function specLevel(j, half, t, a) {
+    if (extSpec && extSpec.length) return clamp(extSpec[Math.floor((j / half) * (extSpec.length - 1))] || 0, 0, 1);
+    if (micOn && micFreq) return micFreq[2 + Math.floor(Math.pow(j / half, 1.5) * 90)] / 255;
+    const n = Math.abs(Math.sin(j * 0.9 + t * 5.1) * Math.sin(j * 0.37 - t * 2.3));
+    return clamp(a * (0.3 + 0.9 * n), 0, 1);
+  }
+
+  let micOn = false, analyser = null, micData = null, micFreq = null, micStream = null, micCtx = null;
+  const micBtn = document.getElementById('mic');
+  const micLevel = () => {
+    analyser.getByteTimeDomainData(micData);
+    analyser.getByteFrequencyData(micFreq);
+    let s = 0;
+    for (let i = 0; i < micData.length; i++) { const v = (micData[i] - 128) / 128; s += v * v; }
+    return clamp(Math.sqrt(s / micData.length) * 4, 0, 1);
+  };
+  async function toggleMic() {
+    if (micOn) {
+      micOn = false; micBtn.classList.remove('active');
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+      if (micCtx) micCtx.close();
+      return;
+    }
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micCtx = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = micCtx.createAnalyser(); analyser.fftSize = 512;
+      micCtx.createMediaStreamSource(micStream).connect(analyser);
+      micData = new Uint8Array(analyser.fftSize);
+      micFreq = new Uint8Array(analyser.frequencyBinCount);
+      micOn = true; micBtn.classList.add('active');
+    } catch (e) { micBtn.textContent = 'Mic blocked'; }
+  }
+  micBtn.addEventListener('click', toggleMic);
+  document.querySelectorAll('button[data-state]').forEach(b => b.addEventListener('click', () => setState(b.dataset.state)));
+  window.addEventListener('keydown', e => {
+    const s = ['idle', 'listening', 'thinking', 'speaking'][+e.key - 1];
+    if (s) setState(s);
+  });
+  window.orb = {
+    setState,
+    setLevel: v => { ext = v == null ? null : clamp(+v, 0, 1); },
+    setSpectrum: arr => { extSpec = arr && arr.length ? arr : null; }
+  };
+
+  function drawRing(M, o, phase, t, a) {
+    const SEG = 140, R = o.R * (1 + 0.02 * a * o.react);
+    const lines = o.band > 0 ? [[0, o.base], [o.band, 0], [-o.band, 0]] : [[0, o.base]];
+    for (let L = 0; L < lines.length; L++) {
+      const yy = lines[L][0];
+      let px = 0, py = 0, pd = 0, have = false;
+      for (let s = 0; s <= SEG; s++) {
+        const ang = (s / SEG) * TAU;
+        tp(M, R * Math.cos(ang), yy, R * Math.sin(ang), P);
+        const d = P.z / 270 * 0.5 + 0.5;
+        if (have) {
+          let wc = lines[L][1];
+          if (L === 0 && Math.sin(ang * o.arcs + phase) > o.arcT) wc = 3;
+          seg(Lring, (d + pd) * 0.5, wc, px, py, (px + P.x) / 2, (py + P.y) / 2, P.x, P.y);
+        }
+        px = P.x; py = P.y; pd = d; have = true;
+      }
+    }
+    // MODIFIED: Ticks now vibrate with the audio
+    for (let k = 0; k < o.ticks; k++) {
+      const ang = (k / o.ticks) * TAU, c = Math.cos(ang), s = Math.sin(ang), major = k % o.major === 0;
+      const len = (major ? 13 : 5) * (1 + a * 0.8 + Math.sin(k * 1.5 + t * 8) * a * 0.5); 
+      tp(M, R * c, 0, R * s, P);
+      tp(M, (R + len) * c, 0, (R + len) * s, Q);
+      seg(Lring, P.z / 270 * 0.5 + 0.5, major ? 2 : 0, P.x, P.y, (P.x + Q.x) / 2, (P.y + Q.y) / 2, Q.x, Q.y);
+    }
+    for (let j = 0; j < 2; j++) {
+      const ang = phase * 1.3 + j * Math.PI;
+      tp(M, R * Math.cos(ang), 0, R * Math.sin(ang), P);
+      nodes.push(P.x, P.y, 3.6 + 1.6 * a);
+    }
+  }
+
+  // MODIFIED: Grid now warps inward with audio
+  function drawGrid(M, a) {
+    const GR = 206, SEG = 64;
+    for (const lat of [-65, -40, -15, 15, 40, 65]) {
+      const la = (lat * Math.PI) / 180, r = GR * Math.cos(la), y = GR * Math.sin(la);
+      let px = 0, py = 0, pd = 0;
+      for (let s = 0; s <= SEG; s++) {
+        const a2 = (s / SEG) * TAU;
+        // Gravity warp
+        const warp = 1 - (a * 0.15 * Math.sin(a2 * 4)); 
+        tp(M, r * Math.cos(a2) * warp, y * warp, r * Math.sin(a2) * warp, P);
+        const d = P.z / GR * 0.5 + 0.5;
+        if (s) seg(Lgrid, (d + pd) * 0.5, 0, px, py, (px + P.x) / 2, (py + P.y) / 2, P.x, P.y);
+        px = P.x; py = P.y; pd = d;
+      }
+    }
+    for (let m = 0; m < 6; m++) {
+      const mm = (m * Math.PI) / 6, cm = Math.cos(mm), sm = Math.sin(mm);
+      let px = 0, py = 0, pd = 0;
+      for (let s = 0; s <= SEG; s++) {
+        const a2 = (s / SEG) * TAU;
+        const warp = 1 - (a * 0.15 * Math.sin(a2 * 3 + m)); 
+        tp(M, GR * Math.cos(a2) * cm * warp, GR * Math.sin(a2) * warp, GR * Math.cos(a2) * sm * warp, P);
+        const d = P.z / GR * 0.5 + 0.5;
+        if (s) seg(Lgrid, (d + pd) * 0.5, 0, px, py, (px + P.x) / 2, (py + P.y) / 2, P.x, P.y);
+        px = P.x; py = P.y; pd = d;
+      }
+    }
+  }
+
+  function drawSpectrum(M, t, a, spec, sAng) {
+    const N = 96, half = N / 2, Rs = 168;
+    let fx = 0, fy = 0, px = 0, py = 0, pd = 0, ix = 0, iy = 0, id = 0;
+    for (let i = 0; i < N; i++) {
+      const ang = (i / N) * TAU + sAng, c = Math.cos(ang), s = Math.sin(ang);
+      const j = i < half ? i : N - 1 - i;
+      const lvl = clamp(specLevel(j, half, t, a) * spec + 0.03, 0, 1);
+      const r1 = Rs + 4 + 74 * lvl;
+      tp(M, Rs * c, 0, Rs * s, P);
+      tp(M, r1 * c, 0, r1 * s, Q);
+      const d = P.z / 270 * 0.5 + 0.5;
+      seg(Lspec, d, lvl > 0.6 ? 3 : lvl > 0.35 ? 2 : lvl > 0.15 ? 1 : 0, P.x, P.y, (P.x + Q.x) / 2, (P.y + Q.y) / 2, Q.x, Q.y);
+      if (i > 0) {
+        seg(Lspec, (d + id) * 0.5, 0, ix, iy, (ix + P.x) / 2, (iy + P.y) / 2, P.x, P.y);
+        if (spec > 0.35) seg(Lspec, (d + pd) * 0.5, 1, px, py, (px + Q.x) / 2, (py + Q.y) / 2, Q.x, Q.y);
+      } else { fx = Q.x; fy = Q.y; }
+      ix = P.x; iy = P.y; id = d; px = Q.x; py = Q.y; pd = d;
+    }
+    if (spec > 0.35) seg(Lspec, pd, 1, px, py, (px + fx) / 2, (py + fy) / 2, fx, fy);
+  }
+
+  // MODIFIED: Added energy arcs between vertices on audio spike
+  function drawCrystal(CAM, t, a, cAng) {
+    const breathe = 1 + 0.18 * a + 0.05 * Math.sin(t * 2) + 0.15 * kick;
+    const layers = [
+      { r: 54, m: mMul(CAM, mMul(mRY(cAng), mRX(cAng * 0.63))), wc: 2, fill: true, dot: 3.0 },
+      { r: 34, m: mMul(CAM, mMul(mRY(-cAng * 1.4), mRZ(cAng * 0.9))), wc: 1, dot: 2.2 },
+      { r: 18, m: mMul(CAM, mMul(mRX(cAng * 2.1), mRY(cAng * 1.7))), wc: 0, dot: 1.6 }
+    ];
+    for (const L of layers) {
+      for (let i = 0; i < 12; i++) tp(L.m, ICO.V[i][0] * L.r * breathe, ICO.V[i][1] * L.r * breathe, ICO.V[i][2] * L.r * breathe, pv[i]);
+      for (const e of ICO.E) {
+        const A = pv[e[0]], B = pv[e[1]];
+        seg(Lcore, ((A.z + B.z) * 0.5) / 80 * 0.5 + 0.5, L.wc, A.x, A.y, (A.x + B.x) / 2, (A.y + B.y) / 2, B.x, B.y);
+      }
+      
+      // ADDED: Lightning arcs between vertices when amp is high
+      if (a > 0.25 && L.wc === 2) {
+        const numArcs = Math.floor(a * 6);
+        for (let i = 0; i < numArcs; i++) {
+          const v1 = pv[Math.floor(Math.random() * 12)];
+          const v2 = pv[Math.floor(Math.random() * 12)];
+          const mx = (v1.x + v2.x) / 2 + (Math.random() - 0.5) * 40 * a;
+          const my = (v1.y + v2.y) / 2 + (Math.random() - 0.5) * 40 * a;
+          seg(Lcore, 0.8, 1, v1.x, v1.y, mx, my, v2.x, v2.y);
+        }
+      }
+
+      for (let i = 0; i < 12; i++) dots.push(pv[i].x, pv[i].y, L.dot);
+      if (L.fill) {
+        ctx.beginPath();
+        for (const f of ICO.F) {
+          ctx.moveTo(pv[f[0]].x, pv[f[0]].y); ctx.lineTo(pv[f[1]].x, pv[f[1]].y); ctx.lineTo(pv[f[2]].x, pv[f[2]].y); ctx.closePath();
+        }
+        ctx.fillStyle = rgba(cur.core, 0.05 + 0.05 * a);
+        ctx.fill();
+      }
+    }
+  }
+
+  let last = performance.now(), T = 0, yaw = 0, pitchPh = 0, precAcc = 0, cAng = 0, sAng = 0, gridAng = 0;
+  let hb = 0, cd = 0, ampSlow = 0;
+
+  function frame(now) {
+    const dt = clamp((now - last) / 1000, 0, 0.05); last = now; T += dt;
+
+    const k = 1 - Math.exp(-dt * 2.6);
+    for (const key of NUM) cur[key] += (tgt[key] - cur[key]) * k;
+    for (const key of COL) for (let c = 0; c < 3; c++) cur[key][c] += (tgt[key][c] - cur[key][c]) * k;
+
+    const target = micOn ? micLevel() : ext !== null ? ext : simulate(state, T);
+    amp += (target - amp) * (target > amp ? 1 - Math.exp(-dt * 28) : 1 - Math.exp(-dt * 7));
+    ampSlow += (amp - ampSlow) * (1 - Math.exp(-dt * 3));
+    kick *= Math.exp(-dt * 2.2);
+    const a = amp * cur.ampGain;
+
+    cd -= dt; hb += dt;
+    if (cd <= 0 && cur.ampGain > 0.5 && amp - ampSlow > 0.18) { waves.push({ age: 0, str: clamp(0.5 + amp, 0, 1) }); cd = 0.28; }
+    if (hb > 4.2 - cur.act * 3) { hb = 0; waves.push({ age: 0, str: 0.35 + 0.3 * cur.act }); }
+    for (let i = waves.length - 1; i >= 0; i--) { waves[i].age += dt * 0.75; if (waves[i].age >= 1) waves.splice(i, 1); }
+
+    yaw += dt * (0.10 + 0.22 * cur.act);
+    pitchPh += dt * 0.21;
+    precAcc += dt * (0.3 + 0.5 * cur.act);
+    cAng += dt * (0.5 + 1.6 * cur.act);
+    sAng += dt * 0.12;
+    gridAng += dt * (0.05 + 0.05 * cur.act);
+    for (let i = 0; i < 4; i++) { gA[i] += dt * GSPD[i] * cur.ringSpin; rPh[i] += dt * (0.6 + 0.4 * i) * (i % 2 ? -1 : 1) * cur.ringSpin; }
+    for (let i = 0; i < ORB; i++) orbAng[i] += dt * orbits[i].w * cur.speed * (1 + 0.8 * kick);
+
+    const pitch = 0.42 + 0.14 * Math.sin(pitchPh) + 0.38 * cur.flat;
+    const CAM = mMul(mRX(pitch), mRY(yaw));
+    const G0 = mMul(mRZ(0.12), mRY(gA[0]));
+    const G1 = mMul(G0, mRX(1.05 + gA[1]));
+    const G2 = mMul(G1, mRZ(0.7 + gA[2]));
+    const G3 = mMul(G2, mRX(gA[3]));
+    const Gs = [G0, G1, G2, G3];
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    const sc = size / BASE;
+    ctx.setTransform(sc, 0, 0, sc, size / 2, size / 2);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    dots.length = 0; nodes.length = 0;
+
+    const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, 300);
+    halo.addColorStop(0, rgba(cur.p, 0.11 * cur.glow));
+    halo.addColorStop(0.6, rgba(cur.s, 0.035 * cur.glow));
+    halo.addColorStop(1, rgba(cur.p, 0));
+    ctx.fillStyle = halo; ctx.fillRect(-300, -300, 600, 600);
+
+    const rad = 120 + 80 * a + 40 * cur.act;
+    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, rad);
+    core.addColorStop(0, rgba(cur.core, 0.9 * cur.glow));
+    core.addColorStop(0.22, rgba(cur.p, 0.3 * cur.glow));
+    core.addColorStop(1, rgba(cur.p, 0));
+    ctx.fillStyle = core; ctx.fillRect(-rad, -rad, rad * 2, rad * 2);
+
+    ctx.fillStyle = rgba(cur.s, 0.55);
+    for (let i = 0; i < DUST; i++) {
+      const d = dust[i];
+      tp(CAM, d.x, d.y, d.z, P);
+      const tw = 0.5 + 0.5 * Math.sin(T * 0.8 + d.ph), dep = P.z / 430 * 0.5 + 0.5;
+      ctx.globalAlpha = clamp(0.05 + 0.45 * tw * dep, 0, 1);
+      ctx.fillRect(P.x - d.s * 0.5, P.y - d.s * 0.5, d.s, d.s);
+    }
+    ctx.globalAlpha = 1;
+
+    const spread = cur.spread * (1 + 0.06 * Math.sin(T * 1.1) + 0.10 * a + 0.07 * kick);
+    const fl = 1 - 0.85 * cur.flat, visThr = 0.4 + 0.62 * cur.act, step = 0.04 * cur.trail;
+    for (let kk = 0; kk < ORB; kk++) {
+      const o = orbits[kk];
+      const Tk = mMul(mRY(o.a0 + precAcc * o.pr), mRX(o.b));
+      const rr = o.r * ORB_R * spread * (1 + 0.08 * a * o.react), sg = o.w < 0 ? -1 : 1;
+      const layer = o.par ? Lcom2 : Lcom1;
+      for (let c = 0; c < COM; c++) {
+        if (o.vis[c] > visThr) continue;
+        const head = orbAng[kk] + (c * TAU) / COM + o.off[c];
+        let px = 0, py = 0, pz = 0;
+        for (let i = 0; i <= TAIL; i++) {
+          const th = head - sg * i * step * o.ts, lx = rr * Math.cos(th), lz = rr * Math.sin(th);
+          tp(CAM, Tk[0] * lx + Tk[2] * lz, (Tk[3] * lx + Tk[5] * lz) * fl, Tk[6] * lx + Tk[8] * lz, P);
+          if (i === 0) dots.push(P.x, P.y, 1.7 + 1.0 * o.react);
+          else seg(layer, ((P.z + pz) * 0.5) / ORB_R * 0.5 + 0.5, CL[i - 1], px, py, (px + P.x) / 2, (py + P.y) / 2, P.x, P.y);
+          
+          // ADDED: Synaptic Bridge logic (connects outer comets to inner core)
+          if (i === 4 && a > 0.1 && Math.random() < 0.05) {
+            const dx = P.x * 0.6, dy = P.y * 0.6; // Pull toward center
+            const mx = (P.x + dx) / 2 + Math.sin(T * 5 + kk) * 30;
+            const my = (P.y + dy) / 2 + Math.cos(T * 5 + kk) * 30;
+            seg(Lbridge, 0.5, 1, P.x, P.y, mx, my, dx, dy);
+          }
+
+          px = P.x; py = P.y; pz = P.z;
+        }
+      }
+    }
+
+    for (let i = 0; i < 4; i++) drawRing(mMul(CAM, Gs[i]), RINGS[i], rPh[i], T, a);
+    drawGrid(mMul(CAM, mRY(-gridAng)), a); // Passed 'a' to allow warping
+    drawSpectrum(mMul(CAM, mRX(0.75)), T, a, cur.spec, sAng);
+    drawCrystal(CAM, T, a, cAng);
+
+    const ringCol = mixc(cur.p, cur.core, 0.3);
+    flush(Lgrid, mixc(cur.s, cur.p, 0.4), 0.3 + 0.2 * cur.act, 0.8);
+    flush(Lbridge, cur.p, 0.6 * a, 0.8); // Flush the new bridges (only visible based on amp)
+    flush(Lcom2, cur.s, 0.9, 0.9);
+    flush(Lcom1, cur.p, 0.9, 0.9);
+    flush(Lring, ringCol, 0.85, 1.0);
+    flush(Lspec, cur.p, 0.9, 1.0);
+    flush(Lcore, cur.core, 0.95, 1.0);
+
+    for (const w of waves) {
+      const e = 1 - w.age;
+      ctx.strokeStyle = rgba(cur.p, 0.6 * w.str * e * e);
+      ctx.lineWidth = 0.8 + 2.4 * e;
+      ctx.beginPath(); ctx.arc(0, 0, 50 + w.age * 250, 0, TAU); ctx.stroke();
+    }
+
+    ctx.fillStyle = rgba(cur.core, 0.95);
+    ctx.beginPath();
+    for (let i = 0; i < dots.length; i += 3) { const r = dots[i + 2] * 0.5; ctx.moveTo(dots[i] + r, dots[i + 1]); ctx.arc(dots[i], dots[i + 1], r, 0, TAU); }
+    ctx.fill();
+    ctx.fillStyle = rgba(mixc(cur.core, [255, 255, 255], 0.5), 1);
+    ctx.beginPath();
+    for (let i = 0; i < nodes.length; i += 3) { const r = nodes[i + 2] * 0.5; ctx.moveTo(nodes[i] + r, nodes[i + 1]); ctx.arc(nodes[i], nodes[i + 1], r, 0, TAU); }
+    ctx.fill();
+
+    ctx.beginPath(); ctx.arc(0, 0, 3 + 6 * a + 2 * cur.act, 0, TAU);
+    ctx.fillStyle = rgba(cur.core, 0.95); ctx.fill();
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    bA.clearRect(0, 0, bloomA.width, bloomA.height);
+    bA.drawImage(canvas, 0, 0, bloomA.width, bloomA.height);
+    bB.clearRect(0, 0, bloomB.width, bloomB.height);
+    bB.drawImage(bloomA, 0, 0, bloomB.width, bloomB.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.globalAlpha = 0.65 * cur.bloom; ctx.drawImage(bloomA, 0, 0, size, size);
+    ctx.globalAlpha = 0.95 * cur.bloom; ctx.drawImage(bloomB, 0, 0, size, size);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+
+    requestAnimationFrame(frame);
+  }
+  document.documentElement.style.setProperty('--accent', rgba(STATES.idle.p, 1));
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
