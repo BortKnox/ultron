@@ -5,8 +5,8 @@
 <h1 align="center">ULTRON</h1>
 
 <p align="center">
-  <b>A voice-first desktop agent with presence.</b><br/>
-  Speak the intent. See the progress. Watch the work.
+  <b>An AI desktop agent that sees, navigates and operates your computer.</b><br/>
+  Speak the goal. Ultron plans the steps and takes action.
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
 
 <p align="center">
   Windows desktop app · Electron + Vue + TypeScript<br/>
-  <a href="#preview">Preview</a> · <a href="#control">Controls</a> · <a href="#install">Get started</a> · <a href="#build-from-source">Development</a> · <a href="CONTRIBUTING.md">Contributing</a>
+  <a href="#what-can-i-ask-it-to-do">What it can do</a> · <a href="#computer-navigation-and-automation">Computer control</a> · <a href="#preview">Preview</a> · <a href="#install">Get started</a> · <a href="#build-from-source">Development</a> · <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 <p align="center">
@@ -30,10 +30,13 @@
 
 ## This is Ultron
 
-Ultron is a desktop assistant developed and maintained by **BortKnox**. It combines
-voice interaction, screen awareness, computer control, and persona-specific memory
-in a floating desktop widget. This repository is the home of Ultron's development,
-releases, and visual identity—not simply a renamed upstream build.
+Ultron turns plain-language requests into actions on your Windows desktop. It can
+read the screen, operate applications, run PowerShell commands, search for files
+and information, and work through multi-step tasks. **It does not just tell you
+where to click—it can do the clicking, typing and navigation.**
+
+Developed and maintained by **BortKnox**, Ultron combines that computer-use engine
+with voice interaction, persona-specific memory and a floating desktop widget.
 
 The focus is a companion with a distinct presence: an orb you engage directly,
 visible progress while it works, and a personality you can shape. Ultron's
@@ -52,7 +55,63 @@ cursor, typing into the app that is actually open.
 No tab switching. No copy-paste relay. You state the outcome; it does the work
 and shows you every step it takes.
 
-When it needs permission, it asks. Once.
+Simple commands can take a direct shell or keyboard route. Tasks that need the
+screen use screenshot-guided interaction. You do not need to script every click
+or restrict your request to a fixed catalogue of automations.
+
+## What can I ask it to do?
+
+Give it an outcome, not a sequence of clicks. These are example requests for
+Ultron's general computer-use capabilities, not separately tested one-click features.
+
+**Organize files and investigate duplicates.** “Help me organize this project
+folder. Compare potential duplicates using my duplicate-finder app and show me
+what should be kept before anything is deleted.” Ultron can navigate file tools
+and perform file-management commands. It is not a built-in, whole-drive duplicate
+scanner; matching filenames alone does not establish that file contents are identical.
+
+**Understand your PC and investigate performance.** “Open System Information and
+Task Manager, review my specs and resource usage, and suggest the easiest
+improvements. Don't change anything yet.” Ultron can operate Windows system tools
+and run system-information commands. Recommendations depend on what it actually
+observes—not a dedicated benchmark or a promise of faster performance.
+
+**Work across applications.** “Open the project folder and my notes app, create
+a checklist from these instructions, and save it with the project.” App launching,
+window switching, text entry and file operations let a task span more than one
+window rather than stop at a chat response.
+
+**Research, then act on what you find.** “Look up how to change this setting,
+open the relevant settings page, and walk me through the options.” Web search,
+screen reading and desktop navigation support tasks that require both information
+and interaction.
+
+For cleanup and configuration work, start with a read-only review, agree on the
+changes and keep backups. Review important results; model-driven actions can fail
+or misinterpret a screen, and confirmation is not enforced uniformly across all
+execution paths. See [Known limits](#known-limits).
+
+## Computer navigation and automation
+
+Ultron's abilities are backed by executable actions, not simulated activity in chat:
+
+- **Mouse and keyboard control** — click, double-click, right-click, type, scroll
+  and use shortcuts to navigate real applications and browser pages.
+- **Screen awareness** — capture the display the overlay is on, interpret what is
+  visible and use subsequent screenshots to guide the next action, with
+  multi-monitor coordinate handling.
+- **Windows command execution** — use PowerShell for file operations, application
+  launch and system queries when a command is more appropriate than GUI navigation.
+- **File and web search** — find files by name in common user folders and look up
+  information online; these are separate tools, not just browser clicks.
+- **Multi-step execution** — generate a high-level task plan, show progress and
+  perform successive actions toward the requested outcome, within configured limits.
+
+For implementation details, see the [action dispatcher](electron/main/services/motor/MotorService.ts),
+[PowerShell controller](electron/main/services/motor/ShellController.ts),
+[computer-use loop](electron/main/services/agent/ComputerUseLoop.ts),
+[task planner](electron/main/services/agent/TaskPlanner.ts) and
+[search service](electron/main/services/search/SearchService.ts).
 
 ---
 
@@ -92,18 +151,6 @@ available. Failures print Google's own words to the log, not a shrug.
 Speech-to-text runs locally through Vosk. Download the model once, then
 recognition works offline. Orb-driven sessions do not require a wake word.
 Cloud intelligence and voice providers still require their respective services.
-
----
-
-## Sight and hands
-
-- **Screen vision** — captures the display the overlay is on and reasons about it.
-- **Computer use** — native Gemini Computer Use for clicking, typing, scrolling
-  and navigating, with multi-monitor awareness.
-- **Planning** — complex requests are broken into 2–5 steps and shown before
-  execution begins.
-- **Visible agency** — the agent cursor is drawn on screen while it works.
-- **Safety** — risky operations stop at a permission island and wait for you.
 
 ---
 
@@ -234,6 +281,14 @@ Bug reports, visual refinements and focused fixes are welcome. Read [`CONTRIBUTI
 ## Known limits
 
 - Windows is the supported target.
+- Computer-use tasks depend on the configured model, available applications,
+  permissions and screen state. Iteration and failure limits can leave a task incomplete.
+- Built-in file search is filename-based, limited to common user folders and
+  bounded results; it is not an exhaustive scan of every drive or content-based duplicate detection.
+- **Confirmation is not universal.** Standard action paths can request approval
+  for actions classified as high or critical risk, but the native Computer Use loop
+  currently auto-acknowledges model confirmation requests. Do not rely on it as a
+  blanket safeguard for deletions or system changes.
 - Gemini speech is buffered, not streamed — playback begins after synthesis.
 - The install will not auto-update yet.
 - Dependency advisories are tracked in `docs/ULTRON.md` §4; the Electron and
