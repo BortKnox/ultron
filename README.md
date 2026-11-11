@@ -5,14 +5,29 @@
 <h1 align="center">ULTRON</h1>
 
 <p align="center">
-  <b>A desktop agent with hands.</b><br/>
-  It watches the screen. It hears you. It finishes the task.
+  <b>A voice-first desktop agent with presence.</b><br/>
+  Speak the intent. See the progress. Watch the work.
 </p>
 
 <p align="center">
   <a href="#install"><img src="https://img.shields.io/badge/install-→-be2631?style=for-the-badge" alt="Install" /></a>&nbsp;
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-2a2d33?style=for-the-badge" alt="License" /></a>
 </p>
+
+---
+
+## This is Ultron
+
+Ultron is a desktop assistant developed and maintained by **BortKnox**. It combines
+voice interaction, screen awareness, computer control, and persona-specific memory
+in a floating desktop widget. This repository is the home of Ultron's development,
+releases, and visual identity—not simply a renamed upstream build.
+
+The focus is a companion with a distinct presence: an orb you engage directly,
+visible progress while it works, and a personality you can shape. Ultron's
+development includes its own branding, multi-provider voice integration,
+manual memory-entry tools, and hardware-verified consecutive orb-driven command
+sessions.
 
 ---
 
@@ -32,18 +47,20 @@ When it needs permission, it asks. Once.
 ## Control
 
 Three switches sit under the orb. Nothing important is buried in a settings
-screen you have to hunt for.
+screen you have to hunt for. The orb itself is the entry point for a command.
 
-| | Control | Behaviour |
-| --- | --- | --- |
-| ◉ | **Microphone** | Starts and stops real capture. Its state is read from the audio pipeline, so the button can never claim to listen while the microphone is off. |
-| ◉ | **Speaker** | Mutes or unmutes spoken responses. Text, listening and commands continue while muted. |
-| ◉ | **Settings** | Opens configuration without leaving the widget. |
+| Control | Behaviour |
+| --- | --- |
+| **Orb** | With the microphone armed, opens a command session without requiring a wake word. With the microphone off, opens the text input only. |
+| **Microphone** | Arms or disarms capture. Its indicator reflects observed audio-frame activity, not a separate UI-only toggle. |
+| **Speaker** | Mutes or unmutes spoken responses. Text, listening and commands continue while muted. |
+| **Settings** | Opens configuration without leaving the widget. |
 
 The microphone is **never** silently armed. Capture starts when you press it, or
 on launch only if you switched on *Start microphone on launch*. A small
 **Listening** badge stays visible even with the widget collapsed — you always
-know whether it is hearing you.
+know whether capture is active. After a voice command, capture stays armed;
+click the orb to begin the next command session.
 
 ---
 
@@ -60,8 +77,9 @@ available. Failures print Google's own words to the log, not a shrug.
 
 **Yandex Alice** — no key required.
 
-Speech-to-text runs locally through Vosk. Wake word is the active persona's
-name. The model downloads once, then works offline.
+Speech-to-text runs locally through Vosk. Download the model once, then
+recognition works offline. Orb-driven sessions do not require a wake word.
+Cloud intelligence and voice providers still require their respective services.
 
 ---
 
@@ -80,19 +98,29 @@ name. The model downloads once, then works offline.
 ## Memory and personas
 
 Ultron remembers facts across sessions, and you can read, edit or delete every
-one of them. Personas give it distinct personalities, knowledge, voices and
-isolated memory. Switch personas from the tray.
+one of them. You can also add narrative memory entries manually. Personas give
+it distinct personalities, knowledge, voices and isolated memory. Switch
+personas from the tray.
 
 ---
 
 ## The look
 
-Graphite, crimson, and a segmented ring that never stops turning.
+Ultron's current interface uses a graphite-and-crimson identity: near-black
+surfaces, a focused accent, and an animated orb that responds to agent state.
+*Ultron crimson* is the default accent; your OS accent is one setting away.
 
-The palette is deliberate: near-black plates, one accent, no rainbow state
-colours. State is carried by shape and position as much as colour, focus rings
-are real, and every animation respects `prefers-reduced-motion`. *Ultron
-crimson* is the default accent; your OS accent is one setting away.
+### Next visual direction — design preview only
+
+The next orb concept is a neural core: gyroscopic rings, orbiting particles,
+a crystalline centre, and a spectral ring for listening and speaking. It explores
+distinct functional states and expressive motion without making the orb a
+conventional dashboard.
+
+[View the standalone orb design preview](https://htmlpreview.github.io/?https://github.com/BortKnox/ultron/blob/share/orb-mockup/docs/orb-preview/index.html).
+Its buttons are demonstration controls, not the proposed widget layout. This is
+a design reference, **not a feature already integrated into the app**. Emotional
+expression driven by response content remains a proposed enhancement.
 
 Icons and marks are original geometry — generated by
 [`scripts/generate-icons.py`](scripts/generate-icons.py), not borrowed art.
@@ -116,7 +144,9 @@ Icons and marks are original geometry — generated by
    - **Gemini**: paste a key, keep `gemini-2.5-flash-preview-tts`, pick a voice, press **Test voice**.
    - **Yandex Alice**: select it. No key.
    - **ElevenLabs**: paste a key and voice id.
-7. `Ctrl+Space`. Speak plainly. It will handle the rest.
+7. Press `Ctrl+Space` to show the widget. For voice input, download the STT model
+   in **Settings → Voice**, arm the microphone, then click the orb and speak.
+   With the microphone off, click the orb to type instead.
 
 Ultron keeps its state in its own `Ultron` user-data directory, created on first
 launch.
@@ -158,11 +188,16 @@ the Gemini voice pipeline is documented in [`docs/GEMINI-TTS.md`](docs/GEMINI-TT
 
 ## Licence
 
-[Apache License 2.0](LICENSE).
+[Apache License 2.0](LICENSE). Original copyright and licence notices are retained.
 
-Original copyright and licence notices are retained. This project is based on
-[Atlas](https://github.com/dortanes/atlas) by
-[dortanes](https://github.com/dortanes), Apache-2.0.
+<details>
+<summary>Upstream acknowledgement</summary>
+
+Ultron originated as a fork of [Atlas](https://github.com/dortanes/atlas) by
+dortanes and incorporates portions of its desktop-agent engine under Apache-2.0.
+Ultron's subsequent development and presentation are maintained in this repository.
+
+</details>
 
 ---
 
