@@ -67,7 +67,6 @@ const SILENCE_MAX = 1500
 
 function dispatch(event: SttEvent): SttEffect[] {
   const transition = reduce(phase.value, {
-    micArmed: phase.value !== 'off',
     autoListen: autoListen.value,
     hardwareActive: hardwareActive.value,
     error: micError.value,
@@ -224,6 +223,7 @@ function releaseCaptureResources(): Promise<void> {
 
 function failHardware(stage: string, generation: number): void {
   if (!isCurrentGeneration(generation, captureGeneration)) return
+  captureGeneration += 1
   console.error(`[STT] Stream Failed: ${stage}`)
   hardwareActive.value = false
   dispatch({ type: 'HARDWARE_LOST', reason: stage })
@@ -412,11 +412,7 @@ function onResult(msg: any): void {
 }
 
 function activate(initialText: string): void {
-  // Always stop TTS on interrupt — backend may have finished streaming
-  // while frontend is still playing the audio blob
-  stopPlayback()
-  api.audio.stopSpeaking.mutate().catch(() => {})
-  ttsSpeaking = false
+  interruptTts()
 
   dispatch({ type: 'WAKE_WORD', text: initialText })
   transcript.value = ''
@@ -433,6 +429,14 @@ function activate(initialText: string): void {
   // If afterWake is empty → don't start timer, wait for actual speech
 
   console.info('[useSTT] Wake word detected — activated')
+}
+
+function interruptTts(): void {
+  // Always stop TTS on interrupt — backend may have finished streaming
+  // while frontend is still playing the audio blob
+  stopPlayback()
+  api.audio.stopSpeaking.mutate().catch(() => {})
+  ttsSpeaking = false
 }
 
 function stripWakeWord(text: string): string {
@@ -464,7 +468,19 @@ function clearSilenceTimer(): void {
 
 /** Start a command session without changing microphone hardware state. */
 function engageCommand(): void {
-  if (!hardwareActive.value || phase.value !== 'live') return
+  if (!hardwareActive.value) return
+  if (phase.value === 'listening') {
+    if (chunks.value.join(' ').trim()) submitTranscript()
+    else {
+      clearSilenceTimer()
+      dispatch({ type: 'SUBMITTED' })
+      transcript.value = ''
+      chunks.value = []
+    }
+    return
+  }
+  if (phase.value !== 'live') return
+  interruptTts()
   transcript.value = ''
   chunks.value = []
   dispatch({ type: 'ORB_CLICK' })
