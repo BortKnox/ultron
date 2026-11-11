@@ -17,8 +17,7 @@
     }
   ],
   "engines": {
-    "node": ">=20.0.0",
-    "yarn": ">=1.22.22"
+    "node": ">=20.0.0"
   },
   "repository": {
     "type": "git",
@@ -89,9 +88,5 @@
     "vue-eslint-parser": "^10.2.0",
     "vue-tsc": "^2.0.6"
   },
-  "packageManager": "yarn@1.22.22",
-  "volta": {
-    "node": "20.19.4",
-    "yarn": "1.22.22"
-  }
+  "packageManager": "npm@10"
 }
