@@ -28,6 +28,7 @@ export type SttEffect =
 export interface SttContext {
   micArmed: boolean
   autoListen: boolean
+  hardwareActive: boolean
   error: string
 }
 
@@ -70,7 +71,7 @@ export function reduce(state: SttState, _ctx: SttContext, event: SttEvent): SttT
         : { state: 'off', effects: [{ type: 'RELEASE' }, { type: 'STOP_LISTENING' }] }
 
     case 'WAKE_WORD':
-      return state === 'live'
+      return state === 'live' && _ctx.hardwareActive
         ? { state: 'listening', effects: [{ type: 'SHOW_WINDOW' }, { type: 'START_LISTENING' }] }
         : stay(state)
 
@@ -84,10 +85,10 @@ export function reduce(state: SttState, _ctx: SttContext, event: SttEvent): SttT
         : stay(state)
 
     case 'HARDWARE_LOST':
-      // PR-3 will execute RELEASE through the serialized capture engine.
+      // dispatch() executes RELEASE through the serialized capture engine.
       return state === 'off'
         ? stay(state)
-        : { state: 'error', effects: [{ type: 'RELEASE' }, { type: 'STOP_LISTENING' }], error: event.reason }
+        : { state: 'off', effects: [{ type: 'RELEASE' }, { type: 'STOP_LISTENING' }], error: event.reason }
 
     case 'WINDOW_HIDDEN':
       return state === 'listening'
@@ -95,7 +96,7 @@ export function reduce(state: SttState, _ctx: SttContext, event: SttEvent): SttT
         : stay(state)
 
     case 'WINDOW_SHOWN':
-      return state === 'live' && _ctx.autoListen
+      return state === 'live' && _ctx.autoListen && _ctx.hardwareActive
         ? { state: 'listening', effects: [{ type: 'START_LISTENING' }] }
         : stay(state)
 

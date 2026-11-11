@@ -4,6 +4,7 @@ import { useAgent } from './useAgent'
 import { usePersonas } from './usePersonas'
 import { stopPlayback } from './useTTS'
 import { reduce, type SttEffect, type SttEvent, type SttState } from './stt/machine'
+import { isCurrentGeneration, watchdogStage } from './stt/captureGuards'
 
 /**
  * useSTT — voice-first speech-to-text composable.
@@ -31,6 +32,8 @@ import { reduce, type SttEffect, type SttEvent, type SttState } from './stt/mach
 // ── State ──
 
 const phase = ref<SttState>('off')
+/** True only after the active capture graph has delivered a recent frame. */
+const hardwareActive = ref(false)
 const transcript = ref('')
 const chunks = ref<string[]>([])
 const isModelLoaded = ref(false)
@@ -47,6 +50,13 @@ let recognizer: any = null
 let audioContext: AudioContext | null = null
 let mediaStream: MediaStream | null = null
 let sourceNode: MediaStreamAudioSourceNode | null = null
+let workletNode: AudioWorkletNode | null = null
+let captureWatchdog: ReturnType<typeof setInterval> | null = null
+let captureGeneration = 0
+let releaseBarrier: Promise<void> = Promise.resolve()
+let captureStartedAt = 0
+let lastAudioFrameAt = 0
+let hasReceivedAudioFrame = false
 let silenceTimer: ReturnType<typeof setTimeout> | null = null
 let ttsSpeaking = false
 let lastSubmitTime = 0
@@ -59,6 +69,7 @@ function dispatch(event: SttEvent): SttEffect[] {
   const transition = reduce(phase.value, {
     micArmed: phase.value !== 'off',
     autoListen: autoListen.value,
+    hardwareActive: hardwareActive.value,
     error: micError.value,
   }, event)
   phase.value = transition.state
@@ -75,11 +86,14 @@ function dispatch(event: SttEvent): SttEffect[] {
       case 'SHOW_WINDOW':
         api.system.showWindow.mutate().catch(() => {})
         break
-      case 'SUBMIT':
-      case 'ACQUIRE':
       case 'RELEASE':
-        // ACQUIRE/RELEASE are executed by enable()/stopMic(), which own the
-        // asynchronous hardware lifecycle. SUBMIT is executed by the caller.
+        void releaseCaptureResources()
+        break
+      case 'ACQUIRE':
+        // ACQUIRE is executed by enable(), which owns the asynchronous arm.
+        break
+      case 'SUBMIT':
+        // SUBMIT is executed by the caller after collecting the transcript.
         break
     }
   }
@@ -169,18 +183,69 @@ async function loadModel(): Promise<void> {
 
 // ── Mic lifecycle ──
 
+function releaseCaptureResources(): Promise<void> {
+  if (captureWatchdog) {
+    clearInterval(captureWatchdog)
+    captureWatchdog = null
+  }
+
+  const oldWorklet = workletNode
+  const oldSource = sourceNode
+  const oldContext = audioContext
+  const oldStream = mediaStream
+  const oldRecognizer = recognizer
+
+  workletNode = null
+  sourceNode = null
+  audioContext = null
+  mediaStream = null
+  recognizer = null
+  hardwareActive.value = false
+
+  const release = async (): Promise<void> => {
+    oldWorklet?.port.close()
+    oldWorklet?.disconnect()
+    oldSource?.disconnect()
+    oldStream?.getTracks().forEach((track) => track.stop())
+    oldRecognizer?.remove()
+
+    if (oldWorklet || oldSource || oldContext || oldStream || oldRecognizer) {
+      console.info('[STT] Stream Released')
+    }
+
+    if (oldContext) {
+      await oldContext.close().catch(() => {})
+    }
+  }
+
+  releaseBarrier = releaseBarrier.then(release, release)
+  return releaseBarrier
+}
+
+function failHardware(stage: string, generation: number): void {
+  if (!isCurrentGeneration(generation, captureGeneration)) return
+  console.error(`[STT] Stream Failed: ${stage}`)
+  hardwareActive.value = false
+  dispatch({ type: 'HARDWARE_LOST', reason: stage })
+}
+
 async function startMic(): Promise<void> {
+  const generation = ++captureGeneration
+  hardwareActive.value = false
+  let failureStage = 'arm'
+
   try {
+    await releaseCaptureResources()
+    if (!isCurrentGeneration(generation, captureGeneration)) return
+
+    failureStage = 'model'
     if (!model) await loadModel()
     if (!model) throw new Error('Speech model failed to load.')
 
     const sampleRate = 16000
 
-    recognizer = new model.KaldiRecognizer(sampleRate)
-    recognizer.on('result', onResult)
-    recognizer.on('partialresult', onPartialResult)
-
-    mediaStream = await navigator.mediaDevices.getUserMedia({
+    failureStage = 'get-user-media'
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         sampleRate: { ideal: sampleRate },
         channelCount: 1,
@@ -188,62 +253,93 @@ async function startMic(): Promise<void> {
         noiseSuppression: true,
       },
     })
+    if (!isCurrentGeneration(generation, captureGeneration)) {
+      stream.getTracks().forEach((track) => track.stop())
+      return
+    }
+    mediaStream = stream
+    console.info('[STT] Stream Acquired')
 
+    for (const track of stream.getTracks()) {
+      track.addEventListener('ended', () => failHardware('track-ended', generation))
+    }
+
+    failureStage = 'audio-context'
     audioContext = new AudioContext({ sampleRate })
-    sourceNode = audioContext.createMediaStreamSource(mediaStream)
+    const context = audioContext
+    failureStage = 'audio-context-resume'
+    await context.resume()
+    if (context.state !== 'running') {
+      throw new Error(`AudioContext is ${context.state}`)
+    }
+    context.addEventListener('statechange', () => {
+      if (generation !== captureGeneration || audioContext !== context) return
+      if (context.state !== 'running') failHardware(`audio-context-${context.state}`, generation)
+    })
 
-    // Use AudioWorklet if available (off-main-thread), fallback to ScriptProcessor
-    await audioContext.audioWorklet.addModule(createWorkletBlob())
-    const workletNode = new AudioWorkletNode(audioContext, 'stt-processor')
-    workletNode.port.onmessage = (e) => {
-      if (!recognizer) return
+    recognizer = new model.KaldiRecognizer(sampleRate)
+    recognizer.on('result', onResult)
+    recognizer.on('partialresult', onPartialResult)
+
+    sourceNode = context.createMediaStreamSource(stream)
+
+    // AudioWorklet is the capture node required by D4; never fall back to ScriptProcessor.
+    failureStage = 'audio-worklet-module'
+    await context.audioWorklet.addModule(createWorkletBlob())
+    failureStage = 'audio-worklet-node'
+    workletNode = new AudioWorkletNode(context, 'stt-processor')
+    const activeWorklet = workletNode
+    activeWorklet.port.onmessage = (e) => {
+      if (!recognizer || !isCurrentGeneration(generation, captureGeneration) || workletNode !== activeWorklet) return
+      lastAudioFrameAt = Date.now()
+      if (!hasReceivedAudioFrame) {
+        hasReceivedAudioFrame = true
+        hardwareActive.value = true
+      }
       // During TTS: only process audio for wake word detection (live phase)
       // Skip feeding audio when actively listening to avoid TTS echo
       if (ttsSpeaking && phase.value !== 'live') return
 
       const samples = e.data as Float32Array
-      const buf = audioContext!.createBuffer(1, samples.length, sampleRate)
+      const buf = context.createBuffer(1, samples.length, sampleRate)
       buf.getChannelData(0).set(samples)
       recognizer.acceptWaveform(buf)
     }
     sourceNode.connect(workletNode)
-    workletNode.connect(audioContext.destination)
+    activeWorklet.connect(context.destination)
+
+    captureStartedAt = Date.now()
+    lastAudioFrameAt = captureStartedAt
+    hasReceivedAudioFrame = false
+    captureWatchdog = setInterval(() => {
+      if (!isCurrentGeneration(generation, captureGeneration) || audioContext !== context) return
+      const now = Date.now()
+      const stage = watchdogStage(now, captureStartedAt, lastAudioFrameAt, hasReceivedAudioFrame)
+      if (stage) failHardware(stage, generation)
+    }, 250)
 
     dispatch({ type: 'ARMED' })
     initVisibilityWatch()
-    console.info('[useSTT] Mic started, listening for wake word...')
   } catch (err) {
-    const reason = describeMicError(err)
-    dispatch({ type: 'ARM_FAILED', reason })
+    if (isCurrentGeneration(generation, captureGeneration)) {
+      const reason = describeMicError(err)
+      console.error(`[STT] Stream Failed: ${failureStage}`)
+      dispatch({ type: 'ARM_FAILED', reason })
+      await releaseCaptureResources()
+    }
     throw err
   }
 }
 
 async function stopMic(): Promise<void> {
   clearSilenceTimer()
-
+  captureGeneration += 1
+  hardwareActive.value = false
   dispatch({ type: 'MIC_OFF' })
-
-  const oldContext = audioContext
-  sourceNode?.disconnect()
-  sourceNode = null
-  audioContext = null
-
-  // Releasing the tracks is what actually turns the microphone off
-  mediaStream?.getTracks().forEach((t) => t.stop())
-  mediaStream = null
-
-  recognizer?.remove()
-  recognizer = null
+  await releaseBarrier
 
   transcript.value = ''
   chunks.value = []
-  // Always close the captured context. A second stop can be issued after the
-  // reducer is already `off`, but the baseline resource teardown must remain
-  // idempotent and unconditional.
-  if (oldContext) {
-    await oldContext.close().catch(() => {})
-  }
 }
 
 // ── AudioWorklet (inlined as blob) ──
@@ -438,12 +534,13 @@ function setAutoListen(enabled: boolean): void {
 // ── Composable ──
 
 export function useSTT() {
-  const isActivated = computed(() => phase.value === 'listening')
+  const isActivated = computed(() => hardwareActive.value && phase.value === 'listening')
   /** True while the microphone is actually capturing audio */
-  const micActive = computed(() => phase.value === 'live' || phase.value === 'listening')
+  const micActive = computed(() => hardwareActive.value)
 
   return {
     phase,
+    hardwareActive,
     transcript,
     chunks,
     isActivated,
