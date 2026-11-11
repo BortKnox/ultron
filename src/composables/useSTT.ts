@@ -3,6 +3,7 @@ import { api } from '@/api'
 import { useAgent } from './useAgent'
 import { usePersonas } from './usePersonas'
 import { stopPlayback } from './useTTS'
+import { reduce, type SttEffect, type SttEvent, type SttState } from './stt/machine'
 
 /**
  * useSTT — voice-first speech-to-text composable.
@@ -29,9 +30,7 @@ import { stopPlayback } from './useTTS'
 
 // ── State ──
 
-type STTPhase = 'off' | 'idle' | 'activated' | 'listening'
-
-const phase = ref<STTPhase>('off')
+const phase = ref<SttState>('off')
 const transcript = ref('')
 const chunks = ref<string[]>([])
 const isModelLoaded = ref(false)
@@ -55,6 +54,37 @@ let lastSubmitText = ''
 
 const SILENCE_BASE = 700
 const SILENCE_MAX = 1500
+
+function dispatch(event: SttEvent): SttEffect[] {
+  const transition = reduce(phase.value, {
+    micArmed: phase.value !== 'off',
+    autoListen: autoListen.value,
+    error: micError.value,
+  }, event)
+  phase.value = transition.state
+  if (transition.error) micError.value = transition.error
+
+  for (const effect of transition.effects) {
+    switch (effect.type) {
+      case 'START_LISTENING':
+        api.audio.startListening.mutate().catch(() => {})
+        break
+      case 'STOP_LISTENING':
+        api.audio.stopListening.mutate().catch(() => {})
+        break
+      case 'SHOW_WINDOW':
+        api.system.showWindow.mutate().catch(() => {})
+        break
+      case 'SUBMIT':
+      case 'ACQUIRE':
+      case 'RELEASE':
+        // ACQUIRE/RELEASE are executed by enable()/stopMic(), which own the
+        // asynchronous hardware lifecycle. SUBMIT is executed by the caller.
+        break
+    }
+  }
+  return transition.effects
+}
 
 // ── TTS coordination ──
 
@@ -86,16 +116,15 @@ function initVisibilityWatch() {
       // Skip the initial `true` emitted on subscription connect
       if (isFirst) { isFirst = false; return }
 
-      if (visible && phase.value === 'idle' && autoListen.value) {
+      if (visible && phase.value === 'live' && autoListen.value) {
         // Hands-free mode only — otherwise showing the widget never starts listening
         activateWithoutWakeWord()
-      } else if (!visible && (phase.value === 'activated' || phase.value === 'listening')) {
+      } else if (!visible && phase.value === 'listening') {
         // Agent hidden — cancel active listening, return to wake word mode
         clearSilenceTimer()
-        phase.value = 'idle'
+        dispatch({ type: 'WINDOW_HIDDEN' })
         transcript.value = ''
         chunks.value = []
-        api.audio.stopListening.mutate()
         console.info('[useSTT] Deactivated — agent hidden')
       }
     },
@@ -103,10 +132,9 @@ function initVisibilityWatch() {
 }
 
 function activateWithoutWakeWord(): void {
-  phase.value = 'activated'
+  dispatch({ type: 'WINDOW_SHOWN' })
   transcript.value = ''
   chunks.value = []
-  api.audio.startListening.mutate()
   console.info('[useSTT] Activated via tray/hotkey (auto-listen)')
 }
 
@@ -170,7 +198,7 @@ async function startMic(): Promise<void> {
     if (!recognizer) return
     // During TTS: only process audio for wake word detection (idle phase)
     // Skip feeding audio when actively listening to avoid TTS echo
-    if (ttsSpeaking && phase.value !== 'idle') return
+    if (ttsSpeaking && phase.value !== 'live') return
 
     const samples = e.data as Float32Array
     const buf = audioContext!.createBuffer(1, samples.length, sampleRate)
@@ -180,17 +208,19 @@ async function startMic(): Promise<void> {
   sourceNode.connect(workletNode)
   workletNode.connect(audioContext.destination)
 
-  phase.value = 'idle'
+  dispatch({ type: 'ARMED' })
   initVisibilityWatch()
   console.info('[useSTT] Mic started, listening for wake word...')
 }
 
-function stopMic(): void {
+async function stopMic(): Promise<void> {
   clearSilenceTimer()
 
+  const effects = dispatch({ type: 'MIC_OFF' })
+
+  const oldContext = audioContext
   sourceNode?.disconnect()
   sourceNode = null
-  audioContext?.close()
   audioContext = null
 
   // Releasing the tracks is what actually turns the microphone off
@@ -200,10 +230,13 @@ function stopMic(): void {
   recognizer?.remove()
   recognizer = null
 
-  phase.value = 'off'
   transcript.value = ''
   chunks.value = []
-  api.audio.stopListening.mutate().catch(() => {})
+  if (effects.some((effect) => effect.type === 'RELEASE')) {
+    // The reducer announces the release; this function performs the actual
+    // asynchronous resource teardown owned by the composable.
+    await oldContext?.close().catch(() => {})
+  }
 }
 
 // ── AudioWorklet (inlined as blob) ──
@@ -239,14 +272,14 @@ function onPartialResult(msg: any): void {
   // Ignore stale events right after submit
   if (Date.now() - lastSubmitTime < 500) return
 
-  if (phase.value === 'idle') {
+  if (phase.value === 'live') {
     if (partial.toLowerCase().includes(getWakeWord())) {
       activate(partial)
     }
-  } else if (phase.value === 'activated' || phase.value === 'listening') {
+  } else if (phase.value === 'listening') {
     const clean = stripWakeWord(partial)
     if (clean) {
-      phase.value = 'listening'
+      dispatch({ type: 'PARTIAL', text: clean })
       transcript.value = clean
       resetSilenceTimer()
     }
@@ -260,14 +293,14 @@ function onResult(msg: any): void {
   // Ignore stale events right after submit
   if (Date.now() - lastSubmitTime < 500) return
 
-  if (phase.value === 'idle') {
+  if (phase.value === 'live') {
     if (text.toLowerCase().includes(getWakeWord())) {
       activate(text)
     }
-  } else if (phase.value === 'activated' || phase.value === 'listening') {
+  } else if (phase.value === 'listening') {
     const clean = stripWakeWord(text).trim()
     if (clean) {
-      phase.value = 'listening'
+      dispatch({ type: 'FINAL', text: clean })
       chunks.value.push(clean)
       transcript.value = ''
       resetSilenceTimer()
@@ -282,18 +315,15 @@ function activate(initialText: string): void {
   api.audio.stopSpeaking.mutate().catch(() => {})
   ttsSpeaking = false
 
-  phase.value = 'activated'
+  dispatch({ type: 'WAKE_WORD', text: initialText })
   transcript.value = ''
   chunks.value = []
 
   // Show the agent window
-  api.system.showWindow.mutate().catch(() => {})
-  api.audio.startListening.mutate()
-
   // Extract command after wake word
   const afterWake = stripWakeWord(initialText).trim()
   if (afterWake) {
-    phase.value = 'listening'
+    dispatch({ type: 'PARTIAL', text: afterWake })
     transcript.value = afterWake
     resetSilenceTimer()
   }
@@ -343,11 +373,10 @@ function submitTranscript(): void {
   const { sendCommand } = useAgent()
   sendCommand(fullText)
 
-  // Reset to idle (keep listening for next wake word)
-  phase.value = 'idle'
+  // Reset to live (keep the hot capture graph and wait for the next wake word)
+  dispatch({ type: 'SUBMITTED' })
   transcript.value = ''
   chunks.value = []
-  api.audio.stopListening.mutate()
 }
 
 // ── Error descriptions ──
@@ -377,18 +406,21 @@ async function enable(): Promise<void> {
   micError.value = ''
 
   try {
+    const effects = dispatch({ type: 'MIC_ON' })
+    if (!effects.some((effect) => effect.type === 'ACQUIRE')) return
     await startMic()
   } catch (err) {
     console.error('[useSTT] Failed to enable microphone:', err)
     micError.value = describeMicError(err)
+    dispatch({ type: 'ARM_FAILED', reason: micError.value })
     // Make sure a half-started capture cannot linger
-    stopMic()
+    await stopMic()
   }
 }
 
-function disable(): void {
+async function disable(): Promise<void> {
   micError.value = ''
-  stopMic()
+  await stopMic()
 }
 
 /** Mirror the persisted auto-listen preference into the runtime watcher */
@@ -399,7 +431,7 @@ function setAutoListen(enabled: boolean): void {
 // ── Composable ──
 
 export function useSTT() {
-  const isActivated = computed(() => phase.value === 'activated' || phase.value === 'listening')
+  const isActivated = computed(() => phase.value === 'listening')
   /** True while the microphone is actually capturing audio */
   const micActive = computed(() => phase.value !== 'off')
 
