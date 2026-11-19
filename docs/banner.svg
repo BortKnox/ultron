@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 240" width="960" height="240" role="img" aria-label="ULTRON — desktop AI agent">
+  <defs>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M23.5 0V24M0 23.5H24" stroke="#D2D2CD" fill="none"/>
+    </pattern>
+  </defs>
+  <rect width="960" height="240" fill="#E4E4E0"/>
+  <rect width="960" height="240" fill="url(#grid)"/>
+  <rect x="0.5" y="0.5" width="959" height="239" fill="none" stroke="#111"/>
+
+  <!-- top bar -->
+  <rect x="0" y="0" width="960" height="36" fill="#E4E4E0"/>
+  <path d="M0 36.5H960" stroke="#111"/>
+  <g font-family="'SF Mono','JetBrains Mono','DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="11" letter-spacing="0.3" fill="#111">
+    <rect x="16" y="14" width="8" height="8" fill="#FF6A1F"/>
+    <text x="32" y="23" font-weight="700">ULTRON</text>
+    <text x="92" y="23">&#183; DESKTOP AGENT &#183; V0.2.3</text>
+    <text x="944" y="23" text-anchor="end">WINDOWS &#183; ELECTRON / VUE 3 / TYPESCRIPT</text>
+  </g>
+
+  <!-- title block -->
+  <g font-family="'SF Mono','JetBrains Mono','DejaVu Sans Mono',Menlo,Consolas,monospace" fill="#111">
+    <text x="32" y="130" font-size="64" font-weight="700" letter-spacing="4">ULTRON</text>
+    <path d="M32 148.5H336" stroke="#111"/>
+    <text x="32" y="172" font-size="11" letter-spacing="0.3">SEES THE SCREEN. SPEAKS. OPERATES THE COMPUTER.</text>
+    <text x="32" y="190" font-size="11" letter-spacing="0.3" fill="#7A7A75">STATE THE OUTCOME. IT PLANS THE STEPS.</text>
+  </g>
+
+  <!-- orb schematic: thin vector rings, no fills, no shadows -->
+  <g transform="translate(740 142)" fill="none" stroke="#111" stroke-width="1">
+    <circle r="78"/>
+    <circle r="58" stroke-dasharray="2 4"/>
+    <ellipse rx="78" ry="26" transform="rotate(-24)"/>
+    <ellipse rx="78" ry="26" transform="rotate(34)"/>
+    <ellipse rx="52" ry="52" transform="rotate(0)" stroke="#7A7A75"/>
+    <path d="M-92 0H92M0 -92V92" stroke="#7A7A75"/>
+    <rect x="-9" y="-9" width="18" height="18" fill="#E4E4E0"/>
+    <rect x="-4" y="-4" width="8" height="8" fill="#FF6A1F" stroke="none"/>
+    <circle cx="70" cy="-34" r="4" fill="#E4E4E0"/>
+    <circle cx="-62" cy="46" r="4" fill="#E4E4E0"/>
+  </g>
+
+  <!-- state keys: listening / thinking / speaking -->
+  <g font-family="'SF Mono','JetBrains Mono','DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="9" letter-spacing="0.6" fill="#111">
+    <circle cx="36" cy="214" r="3" fill="#FF6A1F"/><text x="44" y="217">LISTEN</text>
+    <circle cx="106" cy="214" r="3" fill="#7FB0D8"/><text x="114" y="217">THINK</text>
+    <circle cx="170" cy="214" r="3" fill="#8CCBA6"/><text x="178" y="217">SPEAK</text>
+    <text x="928" y="217" text-anchor="end" fill="#7A7A75">CTRL+SPACE</text>
+  </g>
+</svg>

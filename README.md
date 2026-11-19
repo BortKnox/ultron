@@ -1,3 +1,5 @@
+![ULTRON: desktop AI agent. Sees the screen, speaks, operates the computer.](docs/banner.svg)
+
 # ULTRON
 
 **A desktop AI agent that sees your screen, speaks, and operates your computer. State the outcome; it plans the steps and does the clicking.**
@@ -9,9 +11,7 @@ STACK    ELECTRON / VUE 3 / TYPESCRIPT / GEMINI
 STATUS   ACTIVE — WINDOWS ONLY, NO INSTALLER YET
 ```
 
-![Ultron neural gyro orb, Ready state (design preview)](docs/screenshots/orb-ready.webp)
-
-*Neural gyro orb: the next visual direction. Design preview only, not yet in the desktop app.*
+[**Capabilities**](#capabilities) · [**Controls**](#controls) · [**Voice**](#voice) · [**Orb preview**](#orb-design-preview) · [**Install**](#install) · [**Build**](#build-from-source) · [**Known limits**](#known-limits)
 
 ## WHAT IT DOES
 
